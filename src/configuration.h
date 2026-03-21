@@ -133,6 +133,7 @@ class Config {
     int sref_threshold;
     bool aggressive_precharging_enabled;
     bool enable_hbm_dual_cmd;
+    bool enable_quick_switch;
 
 
     int epoch_period;

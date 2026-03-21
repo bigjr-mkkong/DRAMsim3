@@ -12,6 +12,8 @@ Timing::Timing(const Config& config)
       other_bankgroups_same_rank(static_cast<int>(CommandType::SIZE)),
       other_ranks(static_cast<int>(CommandType::SIZE)),
       same_rank(static_cast<int>(CommandType::SIZE)) {
+    int link_toggle = 1;
+
     int read_to_read_l = std::max(config.burst_cycle, config.tCCD_L);
     int read_to_read_s = std::max(config.burst_cycle, config.tCCD_S);
     int read_to_read_o = config.burst_cycle + config.tRTRS;
@@ -19,7 +21,7 @@ Timing::Timing(const Config& config)
                         config.tRTRS;
     int read_to_write_o = config.read_delay + config.burst_cycle +
                           config.tRTRS - config.write_delay;
-    int read_to_precharge = config.AL + config.tRTP;
+    int read_to_precharge = config.AL + config.tRTP + link_toggle;
     int readp_to_act =
         config.AL + config.burst_cycle + config.tRTP + config.tRP;
 
@@ -30,7 +32,7 @@ Timing::Timing(const Config& config)
     int write_to_write_l = std::max(config.burst_cycle, config.tCCD_L);
     int write_to_write_s = std::max(config.burst_cycle, config.tCCD_S);
     int write_to_write_o = config.burst_cycle;
-    int write_to_precharge = config.WL + config.burst_cycle + config.tWR;
+    int write_to_precharge = config.WL + config.burst_cycle + config.tWR + link_toggle;
 
     int precharge_to_activate = config.tRP;
     int precharge_to_precharge = config.tPPD;
@@ -46,8 +48,8 @@ Timing::Timing(const Config& config)
         activate_to_read = config.tRCDRD;
         activate_to_write = config.tRCDWR;
     } else {
-        activate_to_read = config.tRCD - config.AL;
-        activate_to_write = config.tRCD - config.AL;
+        activate_to_read = config.tRCD - config.AL + link_toggle;
+        activate_to_write = config.tRCD - config.AL + link_toggle;
     }
     int activate_to_refresh =
         config.tRC;  // need to precharge before ref, so it's tRC
