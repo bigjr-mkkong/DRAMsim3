@@ -16,6 +16,10 @@ BankState::BankState()
     cmd_timing_[static_cast<int>(CommandType::REFRESH)] = 0;
     cmd_timing_[static_cast<int>(CommandType::SREF_ENTER)] = 0;
     cmd_timing_[static_cast<int>(CommandType::SREF_EXIT)] = 0;
+    cmd_timing_[static_cast<int>(CommandType::PIM_START)] = 0;
+    cmd_timing_[static_cast<int>(CommandType::PIM_PAUSE)] = 0;
+    cmd_timing_[static_cast<int>(CommandType::PIM_RESUME)] = 0;
+    cmd_timing_[static_cast<int>(CommandType::PIM_STATE_QUERY)] = 0;
 }
 
 
@@ -33,6 +37,14 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
                 case CommandType::REFRESH:
                 case CommandType::REFRESH_BANK:
                 case CommandType::SREF_ENTER:
+                    required_type = cmd.cmd_type;
+                    break;
+                case CommandType::PIM_START:
+                case CommandType::PIM_PAUSE:
+                case CommandType::PIM_RESUME:
+                case CommandType::PIM_STATE_QUERY:
+                    // PIM controller operates independently of the row buffer;
+                    // can be issued directly when the bank is closed.
                     required_type = cmd.cmd_type;
                     break;
                 default:
@@ -56,6 +68,11 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
                 case CommandType::REFRESH:
                 case CommandType::REFRESH_BANK:
                 case CommandType::SREF_ENTER:
+                case CommandType::PIM_START:
+                case CommandType::PIM_PAUSE:
+                case CommandType::PIM_RESUME:
+                case CommandType::PIM_STATE_QUERY:
+                    // Row buffer must be closed before issuing PIM or refresh commands.
                     required_type = CommandType::PRECHARGE;
                     break;
                 default:
@@ -70,6 +87,11 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
                 case CommandType::READ_PRECHARGE:
                 case CommandType::WRITE:
                 case CommandType::WRITE_PRECHARGE:
+                case CommandType::PIM_START:
+                case CommandType::PIM_PAUSE:
+                case CommandType::PIM_RESUME:
+                case CommandType::PIM_STATE_QUERY:
+                    // Bank must exit self-refresh before any command can be issued.
                     required_type = CommandType::SREF_EXIT;
                     break;
                 default:
@@ -128,6 +150,12 @@ void BankState::UpdateState(const Command& cmd) {
                     break;
                 case CommandType::SREF_ENTER:
                     state_ = State::SREF;
+                    break;
+                case CommandType::PIM_START:
+                case CommandType::PIM_PAUSE:
+                case CommandType::PIM_RESUME:
+                case CommandType::PIM_STATE_QUERY:
+                    // PIM commands do not affect DDR bank state; row buffer remains closed.
                     break;
                 case CommandType::READ:
                 case CommandType::WRITE:

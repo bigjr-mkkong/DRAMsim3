@@ -62,6 +62,11 @@ enum class CommandType {
     REFRESH,
     SREF_ENTER,
     SREF_EXIT,
+    // new commands for PIM
+    PIM_START,
+    PIM_PAUSE,
+    PIM_RESUME,
+    PIM_STATE_QUERY,
     SIZE
 };
 
