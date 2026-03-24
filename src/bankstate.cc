@@ -135,6 +135,11 @@ void BankState::UpdateState(const Command& cmd) {
                 case CommandType::REFRESH_BANK:
                 case CommandType::SREF_ENTER:
                 case CommandType::SREF_EXIT:
+                // should never receive a PIM command when the bank is open
+                case CommandType::PIM_START:
+                case CommandType::PIM_PAUSE:
+                case CommandType::PIM_RESUME:
+                case CommandType::PIM_STATE_QUERY:
                 default:
                     AbruptExit(__FILE__, __LINE__);
             }
@@ -182,6 +187,11 @@ void BankState::UpdateState(const Command& cmd) {
                 case CommandType::REFRESH:
                 case CommandType::REFRESH_BANK:
                 case CommandType::SREF_ENTER:
+                // should never receive a PIM command when the bank is in self-refresh
+                case CommandType::PIM_START:
+                case CommandType::PIM_PAUSE:
+                case CommandType::PIM_RESUME:
+                case CommandType::PIM_STATE_QUERY:
                 default:
                     AbruptExit(__FILE__, __LINE__);
             }
