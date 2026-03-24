@@ -12,7 +12,8 @@ Timing::Timing(const Config& config)
       other_bankgroups_same_rank(static_cast<int>(CommandType::SIZE)),
       other_ranks(static_cast<int>(CommandType::SIZE)),
       same_rank(static_cast<int>(CommandType::SIZE)) {
-    int link_toggle = 1;
+
+    int link_toggle = config.enable_pim_switch?1:0;
 
     int read_to_read_l = std::max(config.burst_cycle, config.tCCD_L);
     int read_to_read_s = std::max(config.burst_cycle, config.tCCD_S);

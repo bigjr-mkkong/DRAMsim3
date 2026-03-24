@@ -226,7 +226,7 @@ void Config::InitSystemParams() {
     trans_queue_size = GetInteger("system", "trans_queue_size", 32);
     unified_queue = reader.GetBoolean("system", "unified_queue", false);
     write_buf_size = GetInteger("system", "write_buf_size", 16);
-    enable_quick_switch = reader.GetBoolean("system", "enable_quick_switch", false);
+    enable_pim_switch = reader.GetBoolean("system", "enable_pim_switch", false);
     std::string ref_policy =
         reader.Get("system", "refresh_policy", "RANK_LEVEL_STAGGERED");
     if (ref_policy == "RANK_LEVEL_SIMULTANEOUS") {
