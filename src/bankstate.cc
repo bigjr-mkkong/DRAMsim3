@@ -1,4 +1,5 @@
 #include "bankstate.h"
+#include "common.h"
 
 namespace dramsim3 {
 
@@ -33,6 +34,7 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
                 case CommandType::REFRESH:
                 case CommandType::REFRESH_BANK:
                 case CommandType::SREF_ENTER:
+                case CommandType::PAUSE:
                     required_type = cmd.cmd_type;
                     break;
                 default:
@@ -58,6 +60,9 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
                 case CommandType::SREF_ENTER:
                     required_type = CommandType::PRECHARGE;
                     break;
+                case CommandType::PAUSE:
+                    required_type = cmd.cmd_type;
+                    break;
                 default:
                     std::cerr << "Unknown type!" << std::endl;
                     AbruptExit(__FILE__, __LINE__);
@@ -70,6 +75,7 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
                 case CommandType::READ_PRECHARGE:
                 case CommandType::WRITE:
                 case CommandType::WRITE_PRECHARGE:
+                case CommandType::PAUSE:
                     required_type = CommandType::SREF_EXIT;
                     break;
                 default:
@@ -83,6 +89,16 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
             std::cerr << "In unknown state" << std::endl;
             AbruptExit(__FILE__, __LINE__);
             break;
+
+        case State::PAUSING:
+            switch (cmd.cmd_type) {
+                case CommandType::RESUME:
+                    required_type = cmd.cmd_type;
+                default:
+                    std::cerr << "Unknown type!" << std::endl;
+                    AbruptExit(__FILE__, __LINE__);
+                    break;
+            }
     }
 
     if (required_type != CommandType::SIZE) {
@@ -108,11 +124,15 @@ void BankState::UpdateState(const Command& cmd) {
                     open_row_ = -1;
                     row_hit_count_ = 0;
                     break;
+                case CommandType::PAUSE:
+                    state_ = State::PAUSING;
+                    break;
                 case CommandType::ACTIVATE:
                 case CommandType::REFRESH:
                 case CommandType::REFRESH_BANK:
                 case CommandType::SREF_ENTER:
                 case CommandType::SREF_EXIT:
+                case CommandType::RESUME:
                 default:
                     AbruptExit(__FILE__, __LINE__);
             }
@@ -129,12 +149,16 @@ void BankState::UpdateState(const Command& cmd) {
                 case CommandType::SREF_ENTER:
                     state_ = State::SREF;
                     break;
+                case CommandType::PAUSE:
+                    state_ = State::PAUSING;
+                    break;
                 case CommandType::READ:
                 case CommandType::WRITE:
                 case CommandType::READ_PRECHARGE:
                 case CommandType::WRITE_PRECHARGE:
                 case CommandType::PRECHARGE:
                 case CommandType::SREF_EXIT:
+                case CommandType::RESUME:
                 default:
                     std::cout << cmd << std::endl;
                     AbruptExit(__FILE__, __LINE__);
@@ -154,6 +178,8 @@ void BankState::UpdateState(const Command& cmd) {
                 case CommandType::REFRESH:
                 case CommandType::REFRESH_BANK:
                 case CommandType::SREF_ENTER:
+                case CommandType::PAUSE:
+                case CommandType::RESUME:
                 default:
                     AbruptExit(__FILE__, __LINE__);
             }

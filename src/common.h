@@ -62,7 +62,9 @@ enum class CommandType {
     REFRESH,
     SREF_ENTER,
     SREF_EXIT,
-    SIZE
+    SIZE,
+    PAUSE,
+    RESUME
 };
 
 struct Command {
