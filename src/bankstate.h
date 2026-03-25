@@ -10,7 +10,7 @@ class BankState {
    public:
     BankState();
 
-    enum class State { OPEN, CLOSED, SREF, PD, SIZE };
+    enum class State { OPEN, CLOSED, SREF, PD, SIZE, PAUSING};
     Command GetReadyCommand(const Command& cmd, uint64_t clk) const;
 
     // Update the state of the bank resulting after the execution of the command
