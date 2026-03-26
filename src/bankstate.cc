@@ -47,14 +47,7 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
                     // can be issued directly when the bank is closed.
                     required_type = cmd.cmd_type;
                     break;
-                case CommandType::PIM_START:
-                case CommandType::PIM_PAUSE:
-                case CommandType::PIM_RESUME:
-                case CommandType::PIM_STATE_QUERY:
-                    // PIM controller operates independently of the row buffer;
-                    // can be issued directly when the bank is closed.
-                    required_type = cmd.cmd_type;
-                    break;
+                
                 default:
                     std::cerr << "Unknown type!" << std::endl;
                     AbruptExit(__FILE__, __LINE__);
@@ -83,9 +76,10 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
                     // Row buffer must be closed before issuing PIM or refresh commands.
                     required_type = CommandType::PRECHARGE;
                     break;
-                case CommandType::PAUSE:
-                    required_type = cmd.cmd_type;
-                    break;
+                // unsolved: how to handle PAUSE command when the bank is open? For now, require the bank to precharge first before pausing.    
+                // case CommandType::PAUSE:
+                //     required_type = cmd.cmd_type;
+                //     break;
                 default:
                     std::cerr << "Unknown type!" << std::endl;
                     AbruptExit(__FILE__, __LINE__);
@@ -119,7 +113,7 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
 
         case State::PAUSING:
             switch (cmd.cmd_type) {
-                case CommandType::RESUME:
+                case CommandType::PIM_RESUME:
                     required_type = cmd.cmd_type;
                 default:
                     std::cerr << "Unknown type!" << std::endl;
@@ -151,7 +145,7 @@ void BankState::UpdateState(const Command& cmd) {
                     open_row_ = -1;
                     row_hit_count_ = 0;
                     break;
-                case CommandType::PAUSE:
+                case CommandType::PIM_PAUSE:
                     state_ = State::PAUSING;
                     break;
                 case CommandType::ACTIVATE:
@@ -161,7 +155,7 @@ void BankState::UpdateState(const Command& cmd) {
                 case CommandType::SREF_EXIT:
                 // should never receive a PIM command when the bank is open
                 case CommandType::PIM_START:
-                case CommandType::PIM_PAUSE:
+                // case CommandType::PIM_PAUSE:
                 case CommandType::PIM_RESUME:
                 case CommandType::PIM_STATE_QUERY:
                 default:
@@ -182,11 +176,11 @@ void BankState::UpdateState(const Command& cmd) {
                     break;
                 case CommandType::PIM_START:
                 // case CommandType::PIM_PAUSE:
-                case CommandType::PIM_RESUME:
+                // case CommandType::PIM_RESUME:
                 case CommandType::PIM_STATE_QUERY:
                     // PIM commands do not affect DDR bank state; row buffer remains closed.
                     break;
-                case CommandType::PAUSE:
+                case CommandType::PIM_PAUSE:
                     state_ = State::PAUSING;
                     break;
                 case CommandType::READ:
@@ -195,7 +189,7 @@ void BankState::UpdateState(const Command& cmd) {
                 case CommandType::WRITE_PRECHARGE:
                 case CommandType::PRECHARGE:
                 case CommandType::SREF_EXIT:
-                case CommandType::RESUME:
+                case CommandType::PIM_RESUME:
                 default:
                     std::cout << cmd << std::endl;
                     AbruptExit(__FILE__, __LINE__);
