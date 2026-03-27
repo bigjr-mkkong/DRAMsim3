@@ -36,6 +36,13 @@ class BankState {
 
     // consecutive accesses to one row
     int row_hit_count_;
+
+    State prev_state;
+    int prev_open_row;
+    /*
+     * TODO
+     * Bank level PIM DDR receiver should also be like one kinds of bankstate, so put it here
+     */
 };
 
 }  // namespace dramsim3

@@ -8,6 +8,12 @@
 #include "dram_system.h"
 #include "hmc.h"
 
+#define PIM_CMD_BASE    (0xdeadbeef00ULL)
+#define PIM_PAUSE_ADDR  (PIM_CMD_BASE + 0xA)
+#define PIM_RESUME_ADDR  (PIM_CMD_BASE + 0xB)
+#define PIM_START_ADDR  (PIM_CMD_BASE + 0xC)
+#define PIM_QUERY_ADDR  (PIM_CMD_BASE + 0xD)
+
 namespace dramsim3 {
 
 // This should be the interface class that deals with CPU

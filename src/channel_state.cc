@@ -179,6 +179,11 @@ void ChannelState::UpdateTiming(const Command& cmd, uint64_t clk) {
                 cmd.addr, timing_.same_rank[static_cast<int>(cmd.cmd_type)],
                 clk);
             break;
+        case CommandType::PIM_PAUSE:
+        case CommandType::PIM_RESUME:
+        case CommandType::PIM_START:
+        case CommandType::PIM_STATE_QUERY:
+            break;
         default:
             AbruptExit(__FILE__, __LINE__);
     }

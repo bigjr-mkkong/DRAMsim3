@@ -1,4 +1,6 @@
 #include "controller.h"
+#include "common.h"
+#include "memory_system.h"
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -268,11 +270,21 @@ void Controller::IssueCommand(const Command &cmd) {
 Command Controller::TransToCommand(const Transaction &trans) {
     auto addr = config_.AddressMapping(trans.addr);
     CommandType cmd_type;
-    if (row_buf_policy_ == RowBufPolicy::OPEN_PAGE) {
-        cmd_type = trans.is_write ? CommandType::WRITE : CommandType::READ;
+    if(trans.addr == PIM_PAUSE_ADDR) {
+        cmd_type = CommandType::PIM_PAUSE;
+    } else if(trans.addr == PIM_RESUME_ADDR) {
+        cmd_type = CommandType::PIM_RESUME;
+    } else if(trans.addr == PIM_START_ADDR) {
+        cmd_type = CommandType::PIM_START;
+    } else if(trans.addr == PIM_QUERY_ADDR) {
+        cmd_type = CommandType::PIM_STATE_QUERY;
     } else {
-        cmd_type = trans.is_write ? CommandType::WRITE_PRECHARGE
-                                  : CommandType::READ_PRECHARGE;
+        if (row_buf_policy_ == RowBufPolicy::OPEN_PAGE) {
+            cmd_type = trans.is_write ? CommandType::WRITE : CommandType::READ;
+        } else {
+            cmd_type = trans.is_write ? CommandType::WRITE_PRECHARGE
+                                      : CommandType::READ_PRECHARGE;
+        }
     }
     return Command(cmd_type, addr, trans.addr);
 }
@@ -338,6 +350,12 @@ void Controller::UpdateCommandStats(const Command &cmd) {
             break;
         case CommandType::SREF_EXIT:
             simple_stats_.Increment("num_srefx_cmds");
+            break;
+        case CommandType::PIM_PAUSE:
+        case CommandType::PIM_RESUME:
+        case CommandType::PIM_START:
+        case CommandType::PIM_STATE_QUERY:
+            simple_stats_.Increment("pim");
             break;
         default:
             AbruptExit(__FILE__, __LINE__);

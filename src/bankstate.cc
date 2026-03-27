@@ -38,16 +38,11 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
                 case CommandType::REFRESH:
                 case CommandType::REFRESH_BANK:
                 case CommandType::SREF_ENTER:
-                
                 case CommandType::PIM_START:
                 case CommandType::PIM_PAUSE:
-                case CommandType::PIM_RESUME:
                 case CommandType::PIM_STATE_QUERY:
-                    // PIM controller operates independently of the row buffer;
-                    // can be issued directly when the bank is closed.
                     required_type = cmd.cmd_type;
                     break;
-                
                 default:
                     std::cerr << "Unknown type!" << std::endl;
                     AbruptExit(__FILE__, __LINE__);
@@ -71,15 +66,11 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
                 case CommandType::SREF_ENTER:
                 case CommandType::PIM_START:
                 case CommandType::PIM_PAUSE:
-                case CommandType::PIM_RESUME:
-                case CommandType::PIM_STATE_QUERY:
-                    // Row buffer must be closed before issuing PIM or refresh commands.
                     required_type = CommandType::PRECHARGE;
                     break;
-                // unsolved: how to handle PAUSE command when the bank is open? For now, require the bank to precharge first before pausing.    
-                // case CommandType::PAUSE:
-                //     required_type = cmd.cmd_type;
-                //     break;
+                case CommandType::PIM_STATE_QUERY:
+                    required_type = cmd.cmd_type;
+                    break;
                 default:
                     std::cerr << "Unknown type!" << std::endl;
                     AbruptExit(__FILE__, __LINE__);
@@ -95,9 +86,10 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
                 case CommandType::PIM_START:
                 case CommandType::PIM_PAUSE:
                 case CommandType::PIM_RESUME:
-                case CommandType::PIM_STATE_QUERY:
-                    // Bank must exit self-refresh before any command can be issued.
                     required_type = CommandType::SREF_EXIT;
+                    break;
+                case CommandType::PIM_STATE_QUERY:
+                    required_type = cmd.cmd_type;
                     break;
                 default:
                     std::cerr << "Unknown type!" << std::endl;
@@ -113,13 +105,19 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
 
         case State::PAUSING:
             switch (cmd.cmd_type) {
+                case CommandType::PIM_STATE_QUERY:
                 case CommandType::PIM_RESUME:
+                case CommandType::PIM_PAUSE:
+                case CommandType::REFRESH:
+                case CommandType::REFRESH_BANK:
                     required_type = cmd.cmd_type;
+                    break;
                 default:
-                    std::cerr << "Unknown type!" << std::endl;
+                    std::cerr << "Unknown type in PAUSING state!" << std::endl;
                     AbruptExit(__FILE__, __LINE__);
                     break;
             }
+            break;
     }
 
     if (required_type != CommandType::SIZE) {
@@ -145,19 +143,16 @@ void BankState::UpdateState(const Command& cmd) {
                     open_row_ = -1;
                     row_hit_count_ = 0;
                     break;
-                case CommandType::PIM_PAUSE:
-                    state_ = State::PAUSING;
+                case CommandType::PIM_STATE_QUERY:
                     break;
+                case CommandType::PIM_PAUSE:
+                case CommandType::PIM_RESUME:
+                case CommandType::PIM_START:
                 case CommandType::ACTIVATE:
                 case CommandType::REFRESH:
                 case CommandType::REFRESH_BANK:
                 case CommandType::SREF_ENTER:
                 case CommandType::SREF_EXIT:
-                // should never receive a PIM command when the bank is open
-                case CommandType::PIM_START:
-                // case CommandType::PIM_PAUSE:
-                case CommandType::PIM_RESUME:
-                case CommandType::PIM_STATE_QUERY:
                 default:
                     AbruptExit(__FILE__, __LINE__);
             }
@@ -174,13 +169,11 @@ void BankState::UpdateState(const Command& cmd) {
                 case CommandType::SREF_ENTER:
                     state_ = State::SREF;
                     break;
-                case CommandType::PIM_START:
-                // case CommandType::PIM_PAUSE:
-                // case CommandType::PIM_RESUME:
                 case CommandType::PIM_STATE_QUERY:
-                    // PIM commands do not affect DDR bank state; row buffer remains closed.
                     break;
+                case CommandType::PIM_START:
                 case CommandType::PIM_PAUSE:
+                    prev_state = state_;
                     state_ = State::PAUSING;
                     break;
                 case CommandType::READ:
@@ -197,6 +190,8 @@ void BankState::UpdateState(const Command& cmd) {
             break;
         case State::SREF:
             switch (cmd.cmd_type) {
+                case CommandType::PIM_STATE_QUERY:
+                    break;
                 case CommandType::SREF_EXIT:
                     state_ = State::CLOSED;
                     break;
@@ -209,13 +204,39 @@ void BankState::UpdateState(const Command& cmd) {
                 case CommandType::REFRESH:
                 case CommandType::REFRESH_BANK:
                 case CommandType::SREF_ENTER:
-                // should never receive a PIM command when the bank is in self-refresh
                 case CommandType::PIM_START:
                 case CommandType::PIM_PAUSE:
                 case CommandType::PIM_RESUME:
-                case CommandType::PIM_STATE_QUERY:
                 default:
                     AbruptExit(__FILE__, __LINE__);
+            }
+            break;
+        case State::PAUSING:
+            switch (cmd.cmd_type) {
+                case CommandType::PIM_RESUME:
+                    state_ = prev_state;
+                    open_row_ = prev_open_row;
+                    break;
+                default:
+                    //Do Nothing
+                    break;
+                // case CommandType::PIM_STATE_QUERY:
+                // case CommandType::REFRESH:
+                // case CommandType::REFRESH_BANK:
+                //     break;
+                // case CommandType::PIM_START:
+                // case CommandType::PIM_PAUSE:
+                // case CommandType::ACTIVATE:
+                // case CommandType::SREF_ENTER:
+                // case CommandType::READ:
+                // case CommandType::WRITE:
+                // case CommandType::READ_PRECHARGE:
+                // case CommandType::WRITE_PRECHARGE:
+                // case CommandType::PRECHARGE:
+                // case CommandType::SREF_EXIT:
+                // default:
+                //     std::cout << cmd << std::endl;
+                //     AbruptExit(__FILE__, __LINE__);
             }
             break;
         default:
