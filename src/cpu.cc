@@ -1,4 +1,5 @@
 #include "cpu.h"
+#include "memory_system.h"
 
 namespace dramsim3 {
 
@@ -11,9 +12,22 @@ void RandomCPU::ClockTick() {
         last_addr_ = gen();
         last_write_ = (gen() % 3 == 0);
     }
-    get_next_ = memory_system_.WillAcceptTransaction(last_addr_, last_write_);
-    if (get_next_) {
-        memory_system_.AddTransaction(last_addr_, last_write_);
+    
+    if(clk_ == 10) {
+        memory_system_.AddTransaction(PIM_START_ADDR, false);
+    } else if(clk_ == 30) {
+        memory_system_.AddTransaction(PIM_RESUME_ADDR, false);
+    } else if(clk_ == 40) {
+        memory_system_.AddTransaction(PIM_PAUSE_ADDR, false);
+    } else if(clk_ == 50) {
+        memory_system_.AddTransaction(PIM_RESUME_ADDR, false);
+    } else if(clk_ == 70) {
+        memory_system_.AddTransaction(PIM_QUERY_ADDR, false);
+    } else {
+        get_next_ = memory_system_.WillAcceptTransaction(last_addr_, last_write_);
+        if (get_next_) {
+            memory_system_.AddTransaction(last_addr_, last_write_);
+        }
     }
     clk_++;
     return;

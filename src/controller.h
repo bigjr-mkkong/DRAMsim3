@@ -3,6 +3,7 @@
 
 #include <fstream>
 #include <map>
+#include <memory>
 #include <unordered_set>
 #include <vector>
 #include "channel_state.h"
@@ -10,6 +11,7 @@
 #include "common.h"
 #include "refresh.h"
 #include "simple_stats.h"
+#include "upmem-automata/upmem_automata.h"
 
 #ifdef THERMAL
 #include "thermal.h"
@@ -80,6 +82,23 @@ class Controller {
     void IssueCommand(const Command &tmp_cmd);
     Command TransToCommand(const Transaction &trans);
     void UpdateCommandStats(const Command &cmd);
+};
+
+
+class UPMEM_sim{
+    private:
+    std::map<int, UpmemAutomata> upmems;
+    int id = 0;
+
+    public:
+    static UPMEM_sim& get_instance() {
+        static UPMEM_sim inst;
+        return inst;
+    }
+    int claim();
+    void tick();
+    void add_cmd(int upmem_id, UpmemCommand cmd);
+
 };
 }  // namespace dramsim3
 #endif

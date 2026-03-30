@@ -1,9 +1,12 @@
 #include "controller.h"
 #include "common.h"
 #include "memory_system.h"
+#include "upmem-automata/upmem_automata.h"
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <memory>
+#include <utility>
 
 namespace dramsim3 {
 
@@ -143,6 +146,7 @@ void Controller::ClockTick() {
         }
     }
 
+    UPMEM_sim::get_instance().tick();
     ScheduleTransaction();
     clk_++;
     cmd_queue_.ClockTick();
@@ -359,6 +363,31 @@ void Controller::UpdateCommandStats(const Command &cmd) {
             break;
         default:
             AbruptExit(__FILE__, __LINE__);
+    }
+}
+
+int UPMEM_sim::claim() {
+    upmems.emplace(id, UpmemAutomata(2000, id));
+    int ret = id;
+    id++;
+    return ret;
+}
+void UPMEM_sim::add_cmd(int upmem_id, UpmemCommand cmd) {
+    auto it = upmems.find(upmem_id);
+
+    if(it != upmems.end()) {
+        it->second.submit(cmd);
+    } else {
+        std::cerr<<"UPMEM_sim(): cannot find id: "<<upmem_id<<std::endl;
+        exit(1);
+    }
+
+    return;
+}
+
+void UPMEM_sim::tick() {
+    for(auto &it: upmems) {
+        it.second.ClockTick();
     }
 }
 

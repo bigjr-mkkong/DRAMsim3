@@ -44,7 +44,13 @@ Command CommandQueue::GetCommandToIssue() {
         }
         auto cmd = GetFirstReadyInQueue(queue);
         if (cmd.IsValid()) {
-            if (cmd.IsReadWrite()) {
+            bool is_pim =
+                 (cmd.cmd_type == CommandType::PIM_START ||
+               cmd.cmd_type == CommandType::PIM_PAUSE ||
+               cmd.cmd_type == CommandType::PIM_RESUME ||
+               cmd.cmd_type == CommandType::PIM_STATE_QUERY);
+
+            if (cmd.IsReadWrite() || is_pim) {
                 EraseRWCommand(cmd);
             }
             return cmd;

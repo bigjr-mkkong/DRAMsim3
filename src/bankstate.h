@@ -43,6 +43,8 @@ class BankState {
      * TODO
      * Bank level PIM DDR receiver should also be like one kinds of bankstate, so put it here
      */
+
+    int upmem_id;
 };
 
 }  // namespace dramsim3

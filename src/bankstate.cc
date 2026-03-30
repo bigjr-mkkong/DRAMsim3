@@ -1,5 +1,7 @@
 #include "bankstate.h"
 #include "common.h"
+#include "controller.h"
+#include "upmem-automata/upmem_automata.h"
 
 namespace dramsim3 {
 
@@ -21,6 +23,7 @@ BankState::BankState()
     cmd_timing_[static_cast<int>(CommandType::PIM_PAUSE)] = 0;
     cmd_timing_[static_cast<int>(CommandType::PIM_RESUME)] = 0;
     cmd_timing_[static_cast<int>(CommandType::PIM_STATE_QUERY)] = 0;
+    upmem_id = UPMEM_sim::get_instance().claim();
 }
 
 
@@ -108,6 +111,7 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
                 case CommandType::PIM_STATE_QUERY:
                 case CommandType::PIM_RESUME:
                 case CommandType::PIM_PAUSE:
+                case CommandType::PIM_START:
                 case CommandType::REFRESH:
                 case CommandType::REFRESH_BANK:
                     required_type = cmd.cmd_type;
@@ -144,6 +148,7 @@ void BankState::UpdateState(const Command& cmd) {
                     row_hit_count_ = 0;
                     break;
                 case CommandType::PIM_STATE_QUERY:
+                    UPMEM_sim::get_instance().add_cmd(upmem_id, UpmemCommand::QUERY);
                     break;
                 case CommandType::PIM_PAUSE:
                 case CommandType::PIM_RESUME:
@@ -170,9 +175,16 @@ void BankState::UpdateState(const Command& cmd) {
                     state_ = State::SREF;
                     break;
                 case CommandType::PIM_STATE_QUERY:
+                    UPMEM_sim::get_instance().add_cmd(upmem_id, UpmemCommand::QUERY);
                     break;
                 case CommandType::PIM_START:
                 case CommandType::PIM_PAUSE:
+                    if(cmd.cmd_type == CommandType::PIM_START){
+                        UPMEM_sim::get_instance().add_cmd(upmem_id, UpmemCommand::START);
+                    } else {
+                        UPMEM_sim::get_instance().add_cmd(upmem_id, UpmemCommand::RESUME);
+                    }
+
                     prev_state = state_;
                     state_ = State::PAUSING;
                     break;
@@ -191,6 +203,7 @@ void BankState::UpdateState(const Command& cmd) {
         case State::SREF:
             switch (cmd.cmd_type) {
                 case CommandType::PIM_STATE_QUERY:
+                    UPMEM_sim::get_instance().add_cmd(upmem_id, UpmemCommand::QUERY);
                     break;
                 case CommandType::SREF_EXIT:
                     state_ = State::CLOSED;
@@ -214,29 +227,16 @@ void BankState::UpdateState(const Command& cmd) {
         case State::PAUSING:
             switch (cmd.cmd_type) {
                 case CommandType::PIM_RESUME:
+                    UPMEM_sim::get_instance().add_cmd(upmem_id, UpmemCommand::PAUSE);
                     state_ = prev_state;
                     open_row_ = prev_open_row;
+                    break;
+                case CommandType::PIM_STATE_QUERY:
+                    UPMEM_sim::get_instance().add_cmd(upmem_id, UpmemCommand::QUERY);
                     break;
                 default:
                     //Do Nothing
                     break;
-                // case CommandType::PIM_STATE_QUERY:
-                // case CommandType::REFRESH:
-                // case CommandType::REFRESH_BANK:
-                //     break;
-                // case CommandType::PIM_START:
-                // case CommandType::PIM_PAUSE:
-                // case CommandType::ACTIVATE:
-                // case CommandType::SREF_ENTER:
-                // case CommandType::READ:
-                // case CommandType::WRITE:
-                // case CommandType::READ_PRECHARGE:
-                // case CommandType::WRITE_PRECHARGE:
-                // case CommandType::PRECHARGE:
-                // case CommandType::SREF_EXIT:
-                // default:
-                //     std::cout << cmd << std::endl;
-                //     AbruptExit(__FILE__, __LINE__);
             }
             break;
         default:

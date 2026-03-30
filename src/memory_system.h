@@ -8,11 +8,12 @@
 #include "dram_system.h"
 #include "hmc.h"
 
-#define PIM_CMD_BASE    (0xdeadbeef00ULL)
-#define PIM_PAUSE_ADDR  (PIM_CMD_BASE + 0xA)
-#define PIM_RESUME_ADDR  (PIM_CMD_BASE + 0xB)
-#define PIM_START_ADDR  (PIM_CMD_BASE + 0xC)
-#define PIM_QUERY_ADDR  (PIM_CMD_BASE + 0xD)
+#define PIM_CMD_BASE    (0xDEADBEEF00ULL)
+
+#define PIM_PAUSE_ADDR  (PIM_CMD_BASE + (0x1ULL << 20)) // Base + 0x100000
+#define PIM_RESUME_ADDR (PIM_CMD_BASE + (0x2ULL << 20)) // Base + 0x200000
+#define PIM_START_ADDR  (PIM_CMD_BASE + (0x3ULL << 20)) // Base + 0x300000
+#define PIM_QUERY_ADDR  (PIM_CMD_BASE + (0x4ULL << 20)) // Base + 0x400000
 
 namespace dramsim3 {
 
