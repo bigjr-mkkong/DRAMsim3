@@ -1,4 +1,5 @@
 #include "memory_system.h"
+#include "configuration.h"
 #include <common.h>
 #include <cstddef>
 #include <cstdint>
@@ -171,6 +172,36 @@ uint64_t MemorySystem::BankLocalToGlobalAddr(uint64_t channel, uint64_t rank,
     return global_addr;
 }
 
+uint64_t MemorySystem::ExactLocalToGlobalAddr(uint64_t channel, uint64_t rank, uint64_t bankgroup, uint64_t bank, uint64_t ro, uint64_t co){
+    uint64_t pos = count_ones(config_->co_mask);
+    uint64_t local_mask = (config_->ro_mask << pos) + config_->co_mask;
+    if(ro > config_->ro_mask) {
+        std::cerr << "Row address out of bounds: " 
+                  << std::hex << ro << " (Row address) > " 
+                  << config_->ro_mask << " (maximum allowed)" << std::endl;
+        AbruptExit(__FILE__, __LINE__);
+    }
+
+    if(co > config_->co_mask) {
+        std::cerr << "Column address out of bounds: " 
+                  << std::hex << co << " (Column address) > " 
+                  << config_->co_mask << " (maximum allowed)" << std::endl;
+        AbruptExit(__FILE__, __LINE__);
+
+    }
+    // bounds masking is unnecessary here because we just did so above
+    uint64_t row = ro;
+    uint64_t col = co;
+
+    uint64_t global_addr = (channel & (config_->ch_mask)) << config_->ch_pos;
+    global_addr += (rank & (config_->ra_mask)) << config_->ra_pos;
+    global_addr += (bankgroup & (config_->bg_mask)) << config_->bg_pos;
+    global_addr += (bank & (config_->ba_mask)) << config_->ba_pos;
+    global_addr += row << config_->ro_pos;
+    global_addr += col << config_->co_pos;
+    global_addr <<= config_->shift_bits;
+    return global_addr;
+}
 uint64_t MemorySystem::GetSpatialGlobalAddr(uint64_t channel, uint64_t rank,
                                         uint64_t bankgroup, uint64_t bank,
                                         uint64_t hex_addr) {
