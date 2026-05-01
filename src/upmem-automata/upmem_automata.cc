@@ -30,6 +30,7 @@ UpmemAutomata::UpmemAutomata(uint64_t max_cycles, int id)
 void UpmemAutomata::ClockTick() {
     // Advance the clock and update the state based on the input command if any.
     clk_++;
+    std::cout<<clk_<<std::endl;
     UpdateState();
 }
 
@@ -75,7 +76,7 @@ void UpmemAutomata::UpdateState() {
             switch (cmd) {
                 case UpmemCommand::QUERY:
                     // no state change; counter increments below
-                    std::cout<<"Aye"<<std::endl;
+                    std::cout<<"PIM executed: "<<clk_<<" cycles"<<std::endl;
                     break;
                 case UpmemCommand::PAUSE:
                     state_ = UpmemState::PAUSE;
@@ -111,8 +112,7 @@ void UpmemAutomata::UpdateState() {
                     state_ = UpmemState::RUNNING;
                     break;
                 case UpmemCommand::QUERY:
-                    std::cout<<"Aye"<<std::endl;
-                    // counter frozen; no state change
+                    std::cout<<"[]UPMEM] clk val: "<<clk_<<std::endl;
                     break;
                 case UpmemCommand::START:
                 case UpmemCommand::PAUSE:

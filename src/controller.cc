@@ -367,7 +367,7 @@ void Controller::UpdateCommandStats(const Command &cmd) {
 }
 
 int UPMEM_sim::claim() {
-    upmems.emplace(id, UpmemAutomata(2000, id));
+    upmems.emplace(id, UpmemAutomata(2147483646, id));
     int ret = id;
     id++;
     return ret;

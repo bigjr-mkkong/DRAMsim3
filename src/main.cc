@@ -52,7 +52,7 @@ int main(int argc, const char **argv) {
 
     CPU *cpu;
     if (!trace_file.empty()) {
-        cpu = new TraceBasedCPU(config_file, output_dir, trace_file);
+        cpu = new PRTraceCPU(config_file, output_dir, trace_file);
     } else {
         if (stream_type == "stream" || stream_type == "s") {
             cpu = new StreamCPU(config_file, output_dir);
@@ -61,7 +61,7 @@ int main(int argc, const char **argv) {
         }
     }
 
-    for (uint64_t clk = 0; clk < cycles; clk++) {
+    for (uint64_t clk = 0; clk < cycles + 100; clk++) {
         cpu->ClockTick();
     }
     cpu->PrintStats();
