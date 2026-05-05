@@ -104,86 +104,54 @@ void TraceBasedCPU::ClockTick() {
     return;
 }
 
-PRTraceCPU::PRTraceCPU(const std::string& config_file,
+PIMTraceBasedCPU::PIMTraceBasedCPU(const std::string& config_file,
                              const std::string& output_dir,
                              const std::string& trace_file)
     : CPU(config_file, output_dir) {
     trace_file_.open(trace_file);
     if (trace_file_.fail()) {
-        std::cerr << "PR Trace file does not exist" << std::endl;
+        std::cerr << "Trace file does not exist" << std::endl;
         AbruptExit(__FILE__, __LINE__);
     }
 }
 
-
-void PRTraceCPU::ClockTick() {
-    // Tick the underlying memory system
+void PIMTraceBasedCPU::ClockTick() {
+    // Advance the memory system clock (maintaining local tick correctness)
     memory_system_.ClockTick();
 
-    // 1. Read the next transaction from our cleaned trace file
-    if (!has_pending_tx_ && !trace_file_.eof()) {
-        std::string line;
-        if (std::getline(trace_file_, line)) {
-            if (line.empty()) return;
+    if (!trace_file_.eof()) {
+        if (get_next_) {
+            get_next_ = false;
+            trace_file_ >> cmd_str >> trans_.added_cycle;
+        }
 
-            std::istringstream iss(line);
-            std::string token;
-            std::vector<std::string> tokens;
-            
-            while (iss >> token) {
-                tokens.push_back(token);
+        if (trans_.added_cycle <= clk_) {
+
+            uint64_t target_addr = 0x0;
+            bool is_write = false; // Assuming command submissions are writes
+
+            if (cmd_str == "PIM_START") {
+                target_addr = PIM_START_ADDR;
+            } else if (cmd_str == "MEM_PAUSE") {
+                target_addr = PIM_RESUME_ADDR;
+            } else if (cmd_str == "MEM_RESUME") {
+                target_addr = PIM_PAUSE_ADDR;
+            } else {
+                target_addr = trans_.addr;
+                is_write = trans_.is_write;
             }
 
-            if (tokens.size() >= 2) {
-                // The timestamp is always the last token
-                target_tick_ = std::stoull(tokens.back());
-                
-                // The command or address is always the first token
-                std::string cmd_or_addr = tokens[0];
-                
-                // If there's an operation (READ/WRITE), it's the middle token
-                std::string op_str = (tokens.size() >= 3) ? tokens[1] : "";
+            get_next_ = memory_system_.WillAcceptTransaction(target_addr, is_write);
 
-                // Default memory operation handling
-                pending_is_write_ = (op_str == "WRITE");
-
-                // 2. Intercept Special Instructions
-                if (cmd_or_addr == "PIM_START") {
-                    pending_addr_ = PIM_START_ADDR;
-                    pending_is_write_ = false; 
-                } 
-                else if (cmd_or_addr == "MEM_PAUSE") {
-                    pending_addr_ = PIM_RESUME_ADDR;
-                    pending_is_write_ = false;
-                } 
-                else if (cmd_or_addr == "MEM_RESUME") {
-                    pending_addr_ = PIM_PAUSE_ADDR;
-                    pending_is_write_ = false;
-                } 
-                else if (cmd_or_addr == "PIM_QUERY") {
-                    pending_addr_ = PIM_QUERY_ADDR;
-                    pending_is_write_ = false;
-                } 
-                else {
-                    // Standard memory access: Parse the hex address natively
-                    pending_addr_ = std::stoull(cmd_or_addr, nullptr, 16);
-                }
-
-                has_pending_tx_ = true;
+            if (get_next_) {
+                memory_system_.AddTransaction(target_addr, is_write);
             }
         }
+    } else {
+        memory_system_.AddTransaction(PIM_QUERY_ADDR, false);
     }
-
-    // 3. Issue the transaction when the MEM local tick reaches the target
-    if (has_pending_tx_) {
-        if (clk_ >= target_tick_) {
-            if (memory_system_.WillAcceptTransaction(pending_addr_, pending_is_write_)) {
-                memory_system_.AddTransaction(pending_addr_, pending_is_write_);
-                has_pending_tx_ = false; // Transaction consumed, ready for next line
-            }
-        }
-    }
-    // Advance the MEM local tick
     clk_++;
+    return;
 }
+
 }  // namespace dramsim3

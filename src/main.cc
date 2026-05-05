@@ -52,7 +52,7 @@ int main(int argc, const char **argv) {
 
     CPU *cpu;
     if (!trace_file.empty()) {
-        cpu = new PRTraceCPU(config_file, output_dir, trace_file);
+        cpu = new PIMTraceBasedCPU(config_file, output_dir, trace_file);
     } else {
         if (stream_type == "stream" || stream_type == "s") {
             cpu = new StreamCPU(config_file, output_dir);

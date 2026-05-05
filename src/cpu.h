@@ -67,21 +67,18 @@ class TraceBasedCPU : public CPU {
     bool get_next_ = true;
 };
 
-class PRTraceCPU: public CPU {
-    public:
-    PRTraceCPU(const std::string& config_file, const std::string& output_dir,
+class PIMTraceBasedCPU : public CPU {
+   public:
+    PIMTraceBasedCPU(const std::string& config_file, const std::string& output_dir,
                   const std::string& trace_file);
-    ~PRTraceCPU() { trace_file_.close(); }
+    ~PIMTraceBasedCPU() { trace_file_.close(); }
     void ClockTick() override;
 
    private:
     std::ifstream trace_file_;
     Transaction trans_;
     bool get_next_ = true;
-    bool has_pending_tx_ = false;
-    uint64_t target_tick_ = 0;
-    uint64_t pending_addr_ = 0;
-    bool pending_is_write_ = false;
+    string cmd_str;
 };
 
 }  // namespace dramsim3

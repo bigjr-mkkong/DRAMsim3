@@ -76,7 +76,7 @@ void UpmemAutomata::UpdateState() {
             switch (cmd) {
                 case UpmemCommand::QUERY:
                     // no state change; counter increments below
-                    std::cout<<"PIM executed: "<<clk_<<" cycles"<<std::endl;
+                    std::cout<<"PIM_QUERY: counter number: "<<counter_<<std::endl;
                     break;
                 case UpmemCommand::PAUSE:
                     state_ = UpmemState::PAUSE;
@@ -112,7 +112,8 @@ void UpmemAutomata::UpdateState() {
                     state_ = UpmemState::RUNNING;
                     break;
                 case UpmemCommand::QUERY:
-                    std::cout<<"[]UPMEM] clk val: "<<clk_<<std::endl;
+                    std::cout<<"PIM_QUERY: counter number: "<<counter_<<std::endl;
+                    // counter frozen; no state change
                     break;
                 case UpmemCommand::START:
                 case UpmemCommand::PAUSE:
