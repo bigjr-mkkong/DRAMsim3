@@ -25,6 +25,27 @@ target_include_directories(args INTERFACE ext/headers)
 add_library(json INTERFACE)
 target_include_directories(json INTERFACE ext/headers)
 
+find_program(CXXBRIDGE cxxbridge REQUIRED)
+
+set(GENERATED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ext/rust_bridge)
+
+file(MAKE_DIRECTORY ${GENERATED_DIR})
+
+add_custom_command(
+    OUTPUT ${GENERATED_DIR}/cxx.h
+    COMMAND ${CXXBRIDGE} --header -o ${GENERATED_DIR}/cxx.h
+)
+
+set(RUST_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/../../src/dramsim3_cxx_ffi.rs")
+
+add_custom_command(
+    OUTPUT ${GENERATED_DIR}/bridge.cc ${GENERATED_DIR}/bridge.h
+    COMMAND ${CXXBRIDGE} ${RUST_SOURCE} --header -o ${GENERATED_DIR}/bridge.h
+    COMMAND ${CXXBRIDGE} ${RUST_SOURCE} -o ${GENERATED_DIR}/bridge.cc
+    DEPENDS ${RUST_SOURCE} ${GENERATED_DIR}/cxx.h
+    COMMENT "Generating C++ bridge from Rust source into ext/rust_bridge/"
+)
+
 # Main DRAMSim Lib
 add_library(dramsim3 STATIC
     src/bankstate.cc
@@ -40,6 +61,8 @@ add_library(dramsim3 STATIC
     src/timing.cc
     src/memory_system.cc
     src/pybindings.cc
+    src/rust-ffi/ms_ffi.cc
+    ${GENERATED_DIR}/bridge.cc
 )
 
 if (THERMAL)
@@ -78,6 +101,12 @@ endif (ADDR_TRACE)
 
 
 target_include_directories(dramsim3 PUBLIC src)
+
+target_include_directories(dramsim3 PUBLIC
+    ${GENERATED_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 target_compile_options(dramsim3 PRIVATE -Wall)
 target_link_libraries(dramsim3 PRIVATE inih format)
 set_target_properties(dramsim3 PROPERTIES
