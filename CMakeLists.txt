@@ -36,7 +36,7 @@ add_custom_command(
     COMMAND ${CXXBRIDGE} --header -o ${GENERATED_DIR}/cxx.h
 )
 
-set(RUST_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/../../src/dramsim3_cxx_ffi.rs")
+set(RUST_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/../../src/memory/dramsim3_cxx_ffi.rs")
 
 add_custom_command(
     OUTPUT ${GENERATED_DIR}/bridge.cc ${GENERATED_DIR}/bridge.h
