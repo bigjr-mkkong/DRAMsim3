@@ -29,6 +29,7 @@ class MemorySystem {
     int GetQueueSize() const;
     int GetClock() const { return dram_system_->GetClock(); };
     bool GetPimMode() const { return dram_system_->GetPimMode(); };
+    bool IsDrained() const { return dram_system_->IsDrained(); };
     void SetPimMode(bool mode) { dram_system_->SetPimMode(mode); };
 
     //TODO: Figure out what are these mmap

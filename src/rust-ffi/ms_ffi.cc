@@ -67,6 +67,10 @@ bool dramsim3_ext::GetPimMode(){
     return unique_ms->GetPimMode();
 }
 
+bool dramsim3_ext::IsDrained(){
+    return unique_ms->IsDrained();
+}
+
 void dramsim3_ext::SetPimMode(bool new_mode){
     unique_ms->SetPimMode(new_mode);
 }
@@ -101,7 +105,7 @@ uint64_t dramsim3_ext::BankLocalToGlobalAddr(const local_addr_bulk &local_addr){
     uint64_t ba = local_addr.bank;
     uint64_t local_addr_ = local_addr.bank_local_addr;
 
-    return unique_ms->GetSpatialGlobalAddr(ch, ra, bg, ba, local_addr_);
+    return unique_ms->BankLocalToGlobalAddr(ch, ra, bg, ba, local_addr_);
 }
 
 uint64_t dramsim3_ext::ExactLocalToGlobalAddr(const local_addr_bulk &local_addr){

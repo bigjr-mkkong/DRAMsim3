@@ -1,6 +1,7 @@
 #include "timing.h"
 #include <algorithm>
 #include <common.h>
+#include <cmath>
 #include <utility>
 
 namespace dramsim3 {
@@ -13,7 +14,11 @@ Timing::Timing(const Config& config)
       other_ranks(static_cast<int>(CommandType::SIZE)),
       same_rank(static_cast<int>(CommandType::SIZE)) {
 
-    int link_toggle = config.enable_pim_switch?1:0;
+    int link_toggle = config.enable_pim_switch ? 1 : 0;
+    int pim_switch_cycles = config.enable_pim_switch
+                                ? static_cast<int>(
+                                      std::ceil(config.pim_swith_t / config.tCK))
+                                : 0;
 
     int read_to_read_l = std::max(config.burst_cycle, config.tCCD_L);
     int read_to_read_s = std::max(config.burst_cycle, config.tCCD_S);
@@ -49,8 +54,8 @@ Timing::Timing(const Config& config)
         activate_to_read = config.tRCDRD;
         activate_to_write = config.tRCDWR;
     } else {
-        activate_to_read = config.tRCD - config.AL + link_toggle;
-        activate_to_write = config.tRCD - config.AL + link_toggle;
+        activate_to_read = config.tRCD - config.AL + pim_switch_cycles;
+        activate_to_write = config.tRCD - config.AL + pim_switch_cycles;
     }
     int activate_to_refresh =
         config.tRC;  // need to precharge before ref, so it's tRC

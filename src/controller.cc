@@ -178,6 +178,13 @@ bool Controller::WillAcceptTransaction(uint64_t hex_addr, bool is_write) const {
     }
 }
 
+bool Controller::IsDrained() const {
+    return unified_queue_.empty() && read_queue_.empty() && pim_queue_.empty() &&
+           write_buffer_.empty() && pending_pim_q_.empty() &&
+           pending_rd_q_.empty() && pending_wr_q_.empty() &&
+           return_queue_.empty() && cmd_queue_.QueueEmpty();
+}
+
 bool Controller::AddTransaction(Transaction trans) {
     trans.added_cycle = clk_;
     simple_stats_.AddValue("interarrival_latency", clk_ - last_trans_clk_);
@@ -223,7 +230,8 @@ void Controller::ScheduleTransaction() {
     if (write_draining_ == 0 && !is_unified_queue_) {
         // we basically have a upper and lower threshold for write buffer
         if ((write_buffer_.size() >= write_buffer_.capacity()) ||
-            (write_buffer_.size() > 8 && cmd_queue_.QueueEmpty())) {
+            (write_buffer_.size() > 8 && cmd_queue_.QueueEmpty()) ||
+            (!write_buffer_.empty() && read_queue_.empty())) {
             write_draining_ = write_buffer_.size();
         }
     }

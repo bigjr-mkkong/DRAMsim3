@@ -23,6 +23,7 @@ public:
     int GetClock();
 
     bool GetPimMode();
+    bool IsDrained();
     void SetPimMode(bool new_mode);
     void GetBytes(size_t start_addr, int64_t &data_index_, size_t &start_byte_);
 

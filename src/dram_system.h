@@ -34,6 +34,14 @@ class BaseDRAMSystem {
     virtual void ClockTick() = 0;
     int GetChannel(uint64_t hex_addr) const;
     bool GetPimMode() const { return pim_mode_; };
+    bool IsDrained() const {
+        for (const auto *ctrl : ctrls_) {
+            if (!ctrl->IsDrained()) {
+                return false;
+            }
+        }
+        return true;
+    };
     void SetPimMode(bool mode) { 
         for (uint64_t i = 0; i < ctrls_.size(); i++)
             ctrls_[i]->SetPimMode(mode); 

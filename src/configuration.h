@@ -134,6 +134,7 @@ class Config {
     bool aggressive_precharging_enabled;
     bool enable_hbm_dual_cmd;
     bool enable_pim_switch;
+    double pim_swith_t;
 
 
     int epoch_period;
