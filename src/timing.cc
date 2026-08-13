@@ -1,7 +1,6 @@
 #include "timing.h"
 #include <algorithm>
 #include <common.h>
-#include <cmath>
 #include <utility>
 
 namespace dramsim3 {
@@ -14,12 +13,6 @@ Timing::Timing(const Config& config)
       other_ranks(static_cast<int>(CommandType::SIZE)),
       same_rank(static_cast<int>(CommandType::SIZE)) {
 
-    int link_toggle = config.enable_pim_switch ? 1 : 0;
-    int pim_switch_cycles = config.enable_pim_switch
-                                ? static_cast<int>(
-                                      std::ceil(config.pim_swith_t / config.tCK))
-                                : 0;
-
     int read_to_read_l = std::max(config.burst_cycle, config.tCCD_L);
     int read_to_read_s = std::max(config.burst_cycle, config.tCCD_S);
     int read_to_read_o = config.burst_cycle + config.tRTRS;
@@ -27,7 +20,7 @@ Timing::Timing(const Config& config)
                         config.tRTRS;
     int read_to_write_o = config.read_delay + config.burst_cycle +
                           config.tRTRS - config.write_delay;
-    int read_to_precharge = config.AL + config.tRTP + link_toggle;
+    int read_to_precharge = config.AL + config.tRTP;
     int readp_to_act =
         config.AL + config.burst_cycle + config.tRTP + config.tRP;
 
@@ -38,7 +31,8 @@ Timing::Timing(const Config& config)
     int write_to_write_l = std::max(config.burst_cycle, config.tCCD_L);
     int write_to_write_s = std::max(config.burst_cycle, config.tCCD_S);
     int write_to_write_o = config.burst_cycle;
-    int write_to_precharge = config.WL + config.burst_cycle + config.tWR + link_toggle;
+    int write_to_precharge =
+        config.WL + config.burst_cycle + config.tWR;
 
     int precharge_to_activate = config.tRP;
     int precharge_to_precharge = config.tPPD;
@@ -54,8 +48,8 @@ Timing::Timing(const Config& config)
         activate_to_read = config.tRCDRD;
         activate_to_write = config.tRCDWR;
     } else {
-        activate_to_read = config.tRCD - config.AL + pim_switch_cycles;
-        activate_to_write = config.tRCD - config.AL + pim_switch_cycles;
+        activate_to_read = config.tRCD - config.AL;
+        activate_to_write = config.tRCD - config.AL;
     }
     int activate_to_refresh =
         config.tRC;  // need to precharge before ref, so it's tRC
@@ -313,6 +307,34 @@ Timing::Timing(const Config& config)
             {CommandType::REFRESH, self_refresh_exit},
             {CommandType::REFRESH_BANK, self_refresh_exit},
             {CommandType::SREF_ENTER, self_refresh_exit}};
+
+    if (config.enable_pim_switch) {
+        auto add_far_segment_edges = [&config](
+                                         std::vector<std::vector<std::pair<
+                                             CommandType, int> > >& table) {
+            table[static_cast<int>(CommandType::TOGGLE_ON)] = {
+                {CommandType::ACTIVATE, config.tTGON},
+                {CommandType::PRECHARGE, config.tTGON}};
+
+            table[static_cast<int>(CommandType::ACTIVATE)].push_back(
+                {CommandType::TOGGLE_OFF, config.tRCD});
+            table[static_cast<int>(CommandType::PRECHARGE)].push_back(
+                {CommandType::TOGGLE_OFF, config.tRP});
+
+            table[static_cast<int>(CommandType::TOGGLE_OFF)] = {
+                {CommandType::READ, config.tTGOFF},
+                {CommandType::READ_PRECHARGE, config.tTGOFF},
+                {CommandType::WRITE, config.tTGOFF},
+                {CommandType::WRITE_PRECHARGE, config.tTGOFF},
+                {CommandType::TOGGLE_ON, config.tTGOFF},
+                {CommandType::REFRESH_BANK, config.tTGOFF},
+                {CommandType::REFRESH, config.tTGOFF},
+                {CommandType::SREF_ENTER, config.tTGOFF}};
+        };
+
+        add_far_segment_edges(same_bank);
+        add_far_segment_edges(pim_mode);
+    }
 }
 
 }  // namespace dramsim3

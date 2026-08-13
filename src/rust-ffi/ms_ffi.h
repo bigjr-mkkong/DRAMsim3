@@ -20,11 +20,24 @@ public:
     int GetBusBits();
     int GetBurstLength();
     int GetQueueSize();
+    int GetNearSwitchLatency();
+    int GetToggleOnLatency();
+    int GetToggleOffLatency();
+    void SetToggleLatencies(int toggle_on_cycles, int toggle_off_cycles);
+    bool GetPimSwitchEnabled();
+    uint64_t GetCapacityBytes();
     int GetClock();
 
     bool GetPimMode();
     bool IsDrained();
     void SetPimMode(bool new_mode);
+    void RequestPause();
+    bool IsPauseRequested();
+    bool IsPauseReady();
+    void CommitPausedMode(bool new_mode);
+    void CancelPause();
+    uint64_t GetPauseParkedTransactions();
+    uint64_t GetPausePromotedTransactions();
     void GetBytes(size_t start_addr, int64_t &data_index_, size_t &start_byte_);
 
 

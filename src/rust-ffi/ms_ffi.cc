@@ -59,6 +59,25 @@ int dramsim3_ext::GetBurstLength() {
 int dramsim3_ext::GetQueueSize() {
 	return unique_ms->GetQueueSize();
 }
+int dramsim3_ext::GetNearSwitchLatency() {
+    return unique_ms->GetNearSwitchLatency();
+}
+int dramsim3_ext::GetToggleOnLatency() {
+    return unique_ms->GetToggleOnLatency();
+}
+int dramsim3_ext::GetToggleOffLatency() {
+    return unique_ms->GetToggleOffLatency();
+}
+void dramsim3_ext::SetToggleLatencies(int toggle_on_cycles,
+                                     int toggle_off_cycles) {
+    unique_ms->SetToggleLatencies(toggle_on_cycles, toggle_off_cycles);
+}
+bool dramsim3_ext::GetPimSwitchEnabled() {
+    return unique_ms->GetPimSwitchEnabled();
+}
+uint64_t dramsim3_ext::GetCapacityBytes() {
+    return unique_ms->GetCapacityBytes();
+}
 int dramsim3_ext::GetClock(){
 	return unique_ms->GetClock();
 }
@@ -73,6 +92,34 @@ bool dramsim3_ext::IsDrained(){
 
 void dramsim3_ext::SetPimMode(bool new_mode){
     unique_ms->SetPimMode(new_mode);
+}
+
+void dramsim3_ext::RequestPause(){
+    unique_ms->RequestPause();
+}
+
+bool dramsim3_ext::IsPauseRequested(){
+    return unique_ms->IsPauseRequested();
+}
+
+bool dramsim3_ext::IsPauseReady(){
+    return unique_ms->IsPauseReady();
+}
+
+void dramsim3_ext::CommitPausedMode(bool new_mode){
+    unique_ms->CommitPausedMode(new_mode);
+}
+
+void dramsim3_ext::CancelPause(){
+    unique_ms->CancelPause();
+}
+
+uint64_t dramsim3_ext::GetPauseParkedTransactions(){
+    return unique_ms->GetPauseParkedTransactions();
+}
+
+uint64_t dramsim3_ext::GetPausePromotedTransactions(){
+    return unique_ms->GetPausePromotedTransactions();
 }
 
 

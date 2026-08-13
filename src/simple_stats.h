@@ -16,6 +16,9 @@ class SimpleStats {
     SimpleStats(const Config& config, int channel_id);
     // incrementing counter
     void Increment(const std::string name) { epoch_counters_[name] += 1; }
+    void IncrementBy(const std::string name, uint64_t value) {
+        epoch_counters_[name] += value;
+    }
 
     // incrementing for vec counter
     void IncrementVec(const std::string name, int pos) {

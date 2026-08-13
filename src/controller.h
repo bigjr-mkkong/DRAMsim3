@@ -3,6 +3,7 @@
 
 #include <fstream>
 #include <map>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 #include "channel_state.h"
@@ -29,6 +30,17 @@ class Controller {
 #endif  // THERMAL
     void ClockTick();
     void SetPimMode(bool mode);
+    void RequestPause();
+    bool IsPauseRequested() const { return pause_requested_; }
+    bool IsPauseReady() const;
+    void CommitPausedMode(bool mode);
+    void CancelPause();
+    uint64_t GetPauseParkedTransactions() const {
+        return pause_parked_transactions_;
+    }
+    uint64_t GetPausePromotedTransactions() const {
+        return pause_promoted_transactions_;
+    }
     bool WillAcceptTransaction(uint64_t hex_addr, bool is_write) const;
     bool AddTransaction(Transaction trans);
     bool IsDrained() const;
@@ -82,10 +94,28 @@ class Controller {
 
     // transaction queueing
     int write_draining_;
+    struct TransactionProgress {
+        bool promoted = false;
+        bool command_complete = false;
+        bool architectural_complete = false;
+    };
+    uint64_t next_transaction_id_ = 1;
+    std::unordered_map<uint64_t, TransactionProgress> transaction_progress_;
+    bool pause_requested_ = false;
+    std::unordered_set<uint64_t> pause_pending_ids_;
+    uint64_t pause_parked_transactions_ = 0;
+    uint64_t pause_promoted_transactions_ = 0;
+
     void ScheduleTransaction();
     void IssueCommand(const Command &tmp_cmd);
     Command TransToCommand(const Transaction &trans);
     void UpdateCommandStats(const Command &cmd);
+    void MarkPromoted(const Transaction &trans);
+    void MarkReadGroupPromoted(uint64_t addr);
+    void MarkCommandComplete(uint64_t transaction_id);
+    void MarkArchitecturalComplete(uint64_t transaction_id);
+    void RetireProgressIfComplete(uint64_t transaction_id);
+    uint64_t ParkedTransactionCount() const;
 };
 }  // namespace dramsim3
 #endif

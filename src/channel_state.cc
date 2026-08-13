@@ -16,11 +16,41 @@ ChannelState::ChannelState(const Config& config, const Timing& timing)
         rank_states.reserve(config_.bankgroups);
         for (auto j = 0; j < config_.bankgroups; j++) {
             auto bg_states =
-                std::vector<BankState>(config_.banks_per_group, BankState());
+                std::vector<BankState>(
+                    config_.banks_per_group,
+                    BankState(config_.enable_pim_switch));
             rank_states.push_back(bg_states);
         }
         bank_states_.push_back(rank_states);
     }
+}
+
+void ChannelState::SetPimMode(bool mode) {
+    if (mode == is_pim_mode_) {
+        return;
+    }
+
+    for (auto& rank_states : bank_states_) {
+        for (auto& bankgroup_states : rank_states) {
+            for (auto& bank_state : bankgroup_states) {
+                bank_state.SetPimMode(mode);
+            }
+        }
+    }
+    is_pim_mode_ = mode;
+}
+
+bool ChannelState::AreNearRowsStable() const {
+    for (const auto& rank : bank_states_) {
+        for (const auto& bank_group : rank) {
+            for (const auto& bank : bank_group) {
+                if (!bank.IsNearRowStable()) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
 }
 
 bool ChannelState::IsAllBankIdleInRank(int rank) const {
@@ -87,7 +117,8 @@ Command ChannelState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
                     continue;
                 }
                 if (ready_cmd.cmd_type != cmd.cmd_type) {  // likely PRECHARGE
-                    Address new_addr = Address(-1, cmd.Rank(), j, k, -1, -1);
+                    Address new_addr =
+                        Address(-1, cmd.Rank(), j, k, ready_cmd.Row(), -1);
                     ready_cmd.addr = new_addr;
                     return ready_cmd;
                 } else {
@@ -141,8 +172,26 @@ void ChannelState::UpdateState(const Command& cmd) {
 
 void ChannelState::UpdateTiming(const Command& cmd, uint64_t clk) {
     switch (cmd.cmd_type) {
+        case CommandType::TOGGLE_ON:
+        case CommandType::TOGGLE_OFF:
+            // Toggle timing is strictly local to the addressed bank.
+            // Unlike the static JEDEC timing table, these two latencies are
+            // lifecycle-controlled at runtime.  Existing next-command
+            // constraints remain intact; the live value applies to toggle
+            // commands issued after the update.
+            for (const auto& cmd_timing :
+                 timing_.same_bank[static_cast<int>(cmd.cmd_type)]) {
+                const int latency =
+                    cmd.cmd_type == CommandType::TOGGLE_ON
+                        ? config_.tTGON
+                        : config_.tTGOFF;
+                bank_states_[cmd.Rank()][cmd.Bankgroup()][cmd.Bank()]
+                    .UpdateTiming(cmd_timing.first, clk + latency);
+            }
+            break;
         case CommandType::ACTIVATE:
             UpdateActivationTimes(cmd.Rank(), clk);
+            [[fallthrough]];
         case CommandType::READ:
         case CommandType::READ_PRECHARGE:
         case CommandType::WRITE:
@@ -187,7 +236,7 @@ void ChannelState::UpdateTiming(const Command& cmd, uint64_t clk) {
                 cmd.addr, timing_.same_rank[static_cast<int>(cmd.cmd_type)],
                 clk);
             break;
-        default:
+        case CommandType::SIZE:
             AbruptExit(__FILE__, __LINE__);
     }
     return;
@@ -198,30 +247,6 @@ void ChannelState::UpdateSameBankTiming(
     const std::vector<std::pair<CommandType, int>>& cmd_timing_list,
     uint64_t clk) {
     for (auto cmd_timing : cmd_timing_list) {
-        std::string cmdname = "OTHER";
-        switch (cmd_timing.first) {
-        case CommandType::READ:
-            cmdname = "READ";
-            break;
-        case CommandType::WRITE:
-            cmdname = "WRITE";
-            break;
-        case CommandType::WRITE_PRECHARGE:
-            cmdname = "WRITE_PRE";
-            break;
-        case CommandType::READ_PRECHARGE:
-            cmdname = "READ_PRE";
-            break;
-        case CommandType::PRECHARGE:
-            cmdname = "PRECHARGE";
-            break;
-        }
-        // std::cerr << "----------------command found " 
-        //           << cmdname << " at cycle " 
-        //           << std::endl
-        //           << "----------------" << clk << " with list length " 
-        //           << cmd_timing_list.size() << " target time " << cmd_timing.second
-        //           << std::endl;
         bank_states_[addr.rank][addr.bankgroup][addr.bank].UpdateTiming(
             cmd_timing.first, clk + cmd_timing.second);
     }

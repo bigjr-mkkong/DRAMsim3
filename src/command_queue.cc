@@ -143,7 +143,7 @@ bool CommandQueue::QueueIsEmpty(int rank, int bankgroup, int bank) const {
 }
 
 bool CommandQueue::QueueEmpty() const {
-    for (const auto q : queues_) {
+    for (const auto& q : queues_) {
         if (!q.empty()) {
             return false;
         }
@@ -209,7 +209,10 @@ Command CommandQueue::PimGetFirstInQueue(CMDQueue &queue) const {
         if (!cmd.IsValid()) {
             continue;
         }
-        if (cmd.cmd_type == CommandType::PRECHARGE) {
+        if (cmd.cmd_type == CommandType::PRECHARGE ||
+            (cmd.cmd_type == CommandType::TOGGLE_ON &&
+             channel_state_.IsRowOpen(cmd.Rank(), cmd.Bankgroup(),
+                                      cmd.Bank()))) {
             if (!ArbitratePrecharge(cmd_it, queue)) {
                 continue;
             }
@@ -225,7 +228,10 @@ Command CommandQueue::GetFirstReadyInQueue(CMDQueue& queue) const {
         if (!cmd.IsValid()) {
             continue;
         }
-        if (cmd.cmd_type == CommandType::PRECHARGE) {
+        if (cmd.cmd_type == CommandType::PRECHARGE ||
+            (cmd.cmd_type == CommandType::TOGGLE_ON &&
+             channel_state_.IsRowOpen(cmd.Rank(), cmd.Bankgroup(),
+                                      cmd.Bank()))) {
             if (!ArbitratePrecharge(cmd_it, queue)) {
                 continue;
             }
@@ -242,7 +248,9 @@ Command CommandQueue::GetFirstReadyInQueue(CMDQueue& queue) const {
 void CommandQueue::EraseRWCommand(const Command& cmd) {
     auto& queue = GetQueue(cmd.Rank(), cmd.Bankgroup(), cmd.Bank());
     for (auto cmd_it = queue.begin(); cmd_it != queue.end(); cmd_it++) {
-        if (cmd.hex_addr == cmd_it->hex_addr && cmd.cmd_type == cmd_it->cmd_type) {
+        if (cmd.transaction_id == cmd_it->transaction_id &&
+            cmd.hex_addr == cmd_it->hex_addr &&
+            cmd.cmd_type == cmd_it->cmd_type) {
             queue.erase(cmd_it);
             return;
         }

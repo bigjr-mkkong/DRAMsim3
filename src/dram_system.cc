@@ -133,7 +133,9 @@ bool JedecDRAMSystem::AddTransaction(uint64_t hex_addr, bool is_write, bool is_p
 #endif
 
     int channel = GetChannel(hex_addr);
-    bool ok = ctrls_[channel]->WillAcceptTransaction(hex_addr, is_write) || is_pim;
+    bool ok = !ctrls_[channel]->IsPauseRequested() &&
+              (ctrls_[channel]->WillAcceptTransaction(hex_addr, is_write) ||
+               is_pim);
 
     assert(ok);
     if (ok) {

@@ -35,6 +35,10 @@ class Config {
    public:
     Config(std::string config_file, std::string out_dir);
     Address AddressMapping(uint64_t hex_addr) const;
+    std::vector<std::string> AddressMappingFields() const;
+    int AddressMappingFieldBits(const std::string& field) const;
+    int AddressMappingFieldPosition(const std::string& field) const;
+    void PrintAddressMapping(std::ostream& os) const;
     // DRAM physical structure
     DRAMProtocol protocol;
     int channel_size;
@@ -57,6 +61,12 @@ class Config {
 
     // Generic DRAM timing parameters
     double tCK;
+    int tTGON;
+    int tTGOFF;
+    double near_segment_latency_scale;
+    int tRP_near;
+    int tRCD_near;
+    int near_segment_switch_latency;
     int burst_cycle;  // seperate BL with timing since for GDDRx it's not BL/2
     int AL;
     int CL;
@@ -134,7 +144,6 @@ class Config {
     bool aggressive_precharging_enabled;
     bool enable_hbm_dual_cmd;
     bool enable_pim_switch;
-    double pim_swith_t;
 
 
     int epoch_period;

@@ -232,6 +232,10 @@ uint64_t MemorySystem::GetSpatialGlobalAddr(uint64_t channel, uint64_t rank,
 
 void MemorySystem::PrintStats() const { dram_system_->PrintStats(); }
 
+void MemorySystem::PrintAddressMapping() const {
+    config_->PrintAddressMapping(std::cout);
+}
+
 void MemorySystem::ResetStats() { dram_system_->ResetStats(); }
 
 MemorySystem* GetMemorySystem(const std::string &config_file, const std::string &output_dir,

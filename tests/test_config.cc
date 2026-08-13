@@ -93,3 +93,13 @@ TEST_CASE("Address Mapping", "[config]") {
     }
 }
 
+TEST_CASE("PIM switch timing", "[config]") {
+    dramsim3::Config config("configs/DDR4_8Gb_x4_2400_pim.ini", ".");
+
+    REQUIRE(config.tTGON == 1);
+    REQUIRE(config.tTGOFF == 1);
+    REQUIRE(config.near_segment_latency_scale == 0.5);
+    REQUIRE(config.tRP_near == 9);
+    REQUIRE(config.tRCD_near == 9);
+    REQUIRE(config.near_segment_switch_latency == 18);
+}

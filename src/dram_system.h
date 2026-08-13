@@ -47,6 +47,75 @@ class BaseDRAMSystem {
             ctrls_[i]->SetPimMode(mode); 
         pim_mode_ = mode; 
     };
+    void SetToggleLatencies(int toggle_on_cycles, int toggle_off_cycles) {
+        if (toggle_on_cycles < 0 || toggle_off_cycles < 0) {
+            std::cerr << "Toggle latencies must be non-negative." << std::endl;
+            AbruptExit(__FILE__, __LINE__);
+        }
+        config_.tTGON = toggle_on_cycles;
+        config_.tTGOFF = toggle_off_cycles;
+    }
+    void RequestPause() {
+        for (const auto *ctrl : ctrls_) {
+            if (ctrl->IsPauseRequested()) {
+                std::cerr << "Cannot request a second memory-system pause."
+                          << std::endl;
+                AbruptExit(__FILE__, __LINE__);
+            }
+        }
+        for (auto *ctrl : ctrls_) {
+            ctrl->RequestPause();
+        }
+    }
+    bool IsPauseRequested() const {
+        for (const auto *ctrl : ctrls_) {
+            if (ctrl->IsPauseRequested()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    bool IsPauseReady() const {
+        if (ctrls_.empty()) {
+            return false;
+        }
+        for (const auto *ctrl : ctrls_) {
+            if (!ctrl->IsPauseReady()) {
+                return false;
+            }
+        }
+        return true;
+    }
+    void CommitPausedMode(bool mode) {
+        if (!IsPauseReady()) {
+            std::cerr << "Cannot commit an unready memory-system pause."
+                      << std::endl;
+            AbruptExit(__FILE__, __LINE__);
+        }
+        for (auto *ctrl : ctrls_) {
+            ctrl->CommitPausedMode(mode);
+        }
+        pim_mode_ = mode;
+    }
+    void CancelPause() {
+        for (auto *ctrl : ctrls_) {
+            ctrl->CancelPause();
+        }
+    }
+    uint64_t GetPauseParkedTransactions() const {
+        uint64_t total = 0;
+        for (const auto *ctrl : ctrls_) {
+            total += ctrl->GetPauseParkedTransactions();
+        }
+        return total;
+    }
+    uint64_t GetPausePromotedTransactions() const {
+        uint64_t total = 0;
+        for (const auto *ctrl : ctrls_) {
+            total += ctrl->GetPausePromotedTransactions();
+        }
+        return total;
+    }
     uint64_t GetClock() const { return clk_; };
 
     std::function<void(uint64_t req_id)> read_callback_, write_callback_;

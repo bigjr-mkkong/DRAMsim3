@@ -502,9 +502,17 @@ void ThermalCalculator::UpdateCMDPower(const int channel, const Command &cmd,
             case CommandType::WRITE_PRECHARGE:
                 energy = config_.write_energy_inc;
                 break;
-            default:
+            case CommandType::PRECHARGE:
+            case CommandType::SREF_ENTER:
+            case CommandType::SREF_EXIT:
+            case CommandType::TOGGLE_ON:
+            case CommandType::TOGGLE_OFF:
                 energy = 0.0;
                 break;
+            case CommandType::REFRESH_BANK:
+            case CommandType::REFRESH:
+            case CommandType::SIZE:
+                AbruptExit(__FILE__, __LINE__);
         }
         if (energy > 0) {
             energy /= config_.BL;

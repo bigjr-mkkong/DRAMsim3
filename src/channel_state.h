@@ -18,7 +18,8 @@ class ChannelState {
     void UpdateTimingAndStates(const Command& cmd, uint64_t clk);
     bool ActivationWindowOk(int rank, uint64_t curr_time) const;
     void UpdateActivationTimes(int rank, uint64_t curr_time);
-    void SetPimMode(bool mode) { is_pim_mode_ = mode; }
+    void SetPimMode(bool mode);
+    bool AreNearRowsStable() const;
     bool IsRowOpen(int rank, int bankgroup, int bank) const {
         return bank_states_[rank][bankgroup][bank].IsRowOpen();
     }

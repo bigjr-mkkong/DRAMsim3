@@ -50,6 +50,7 @@ std::pair<uint64_t, int> Controller::ReturnDoneTrans(uint64_t clk) {
     auto it = return_queue_.begin();
     while (it != return_queue_.end()) {
         if (clk >= it->complete_cycle) {
+            const uint64_t transaction_id = it->id;
             if (it->is_write) {
                 simple_stats_.Increment("num_writes_done");
             } else {
@@ -58,6 +59,7 @@ std::pair<uint64_t, int> Controller::ReturnDoneTrans(uint64_t clk) {
             }
             auto pair = std::make_pair(it->addr, it->is_write);
             it = return_queue_.erase(it);
+            MarkArchitecturalComplete(transaction_id);
             return pair;
         } else {
             ++it;
@@ -76,9 +78,9 @@ void Controller::ClockTick() {
         cmd = cmd_queue_.FinishRefresh();
     }
 
-    if (is_pim_mode_ && !cmd.IsValid()) {
+    if (is_pim_mode_ && !config_.enable_pim_switch && !cmd.IsValid()) {
         std::vector<Command> cmds = cmd_queue_.GetPIMCommandsToIssue();
-        for (int i = 0; i < cmds.size(); i++) {
+        for (size_t i = 0; i < cmds.size(); i++) {
             if (cmds[i].IsValid()) {
                 IssueCommand(cmds[i]);
             }
@@ -95,10 +97,11 @@ void Controller::ClockTick() {
             IssueCommand(cmd);
             cmd_issued = true;
 
-            if (config_.enable_hbm_dual_cmd) {
+            if (config_.enable_hbm_dual_cmd && !cmd.IsToggle()) {
                 auto second_cmd = cmd_queue_.GetCommandToIssue();
                 if (second_cmd.IsValid()) {
-                    if (second_cmd.IsReadWrite() != cmd.IsReadWrite()) {
+                    if (!second_cmd.IsToggle() &&
+                        second_cmd.IsReadWrite() != cmd.IsReadWrite()) {
                         IssueCommand(second_cmd);
                         simple_stats_.Increment("hbm_dual_cmds");
                     }
@@ -164,11 +167,69 @@ void Controller::ClockTick() {
 }
 
 void Controller::SetPimMode(bool mode) {
+    if (mode == is_pim_mode_) {
+        return;
+    }
+    if (!IsDrained()) {
+        std::cerr << "Cannot switch PIM mode before the controller drains."
+                  << std::endl;
+        AbruptExit(__FILE__, __LINE__);
+    }
     is_pim_mode_ = mode;
     channel_state_.SetPimMode(mode);
 }
 
+void Controller::RequestPause() {
+    if (pause_requested_) {
+        std::cerr << "Cannot request a second controller pause." << std::endl;
+        AbruptExit(__FILE__, __LINE__);
+    }
+
+    pause_requested_ = true;
+    pause_pending_ids_.clear();
+    for (const auto& [transaction_id, progress] : transaction_progress_) {
+        if (progress.promoted &&
+            !(progress.command_complete && progress.architectural_complete)) {
+            pause_pending_ids_.insert(transaction_id);
+        }
+    }
+    pause_parked_transactions_ = ParkedTransactionCount();
+    pause_promoted_transactions_ = pause_pending_ids_.size();
+}
+
+bool Controller::IsPauseReady() const {
+    return pause_requested_ && pause_pending_ids_.empty() &&
+           cmd_queue_.QueueEmpty() &&
+           (!config_.enable_pim_switch ||
+            channel_state_.AreNearRowsStable());
+}
+
+void Controller::CommitPausedMode(bool mode) {
+    if (!IsPauseReady()) {
+        std::cerr << "Cannot commit a PIM mode switch before the pause "
+                     "barrier is ready."
+                  << std::endl;
+        AbruptExit(__FILE__, __LINE__);
+    }
+
+    is_pim_mode_ = mode;
+    channel_state_.SetPimMode(mode);
+    pause_requested_ = false;
+    pause_pending_ids_.clear();
+}
+
+void Controller::CancelPause() {
+    if (!pause_requested_) {
+        return;
+    }
+    pause_requested_ = false;
+    pause_pending_ids_.clear();
+}
+
 bool Controller::WillAcceptTransaction(uint64_t hex_addr, bool is_write) const {
+    if (pause_requested_) {
+        return false;
+    }
     if (is_unified_queue_) {
         return unified_queue_.size() < unified_queue_.capacity();
     } else if (!is_write) {
@@ -182,26 +243,39 @@ bool Controller::IsDrained() const {
     return unified_queue_.empty() && read_queue_.empty() && pim_queue_.empty() &&
            write_buffer_.empty() && pending_pim_q_.empty() &&
            pending_rd_q_.empty() && pending_wr_q_.empty() &&
-           return_queue_.empty() && cmd_queue_.QueueEmpty();
+           return_queue_.empty() && cmd_queue_.QueueEmpty() &&
+           transaction_progress_.empty() &&
+           (!config_.enable_pim_switch ||
+            channel_state_.AreNearRowsStable());
 }
 
 bool Controller::AddTransaction(Transaction trans) {
+    if (pause_requested_) {
+        return false;
+    }
+    trans.id = next_transaction_id_++;
     trans.added_cycle = clk_;
     simple_stats_.AddValue("interarrival_latency", clk_ - last_trans_clk_);
     last_trans_clk_ = clk_;
 
     if (trans.is_pim) {
+        transaction_progress_.emplace(trans.id, TransactionProgress{});
         pending_pim_q_.insert(std::make_pair(trans.addr, trans));
         pim_queue_.push_back(trans);
         return true;
     } else if (trans.is_write) {
         if (pending_wr_q_.count(trans.addr) == 0) {  // can not merge writes
+            transaction_progress_.emplace(trans.id, TransactionProgress{});
             pending_wr_q_.insert(std::make_pair(trans.addr, trans));
             if (is_unified_queue_) {
                 unified_queue_.push_back(trans);
             } else {
                 write_buffer_.push_back(trans);
             }
+        } else {
+            transaction_progress_.emplace(
+                trans.id,
+                TransactionProgress{false, true, false});
         }
         trans.complete_cycle = clk_ + 1;
         return_queue_.push_back(trans);
@@ -209,12 +283,29 @@ bool Controller::AddTransaction(Transaction trans) {
     } else {  // read
         // if in write buffer, use the write buffer value
         if (pending_wr_q_.count(trans.addr) > 0 && !trans.is_pim) {
+            transaction_progress_.emplace(
+                trans.id,
+                TransactionProgress{false, true, false});
             trans.complete_cycle = clk_ + 1;
             return_queue_.push_back(trans);
             return true;
         }
+        bool group_promoted = false;
+        auto pending_range = pending_rd_q_.equal_range(trans.addr);
+        for (auto it = pending_range.first; it != pending_range.second; ++it) {
+            auto progress = transaction_progress_.find(it->second.id);
+            if (progress != transaction_progress_.end() &&
+                progress->second.promoted) {
+                group_promoted = true;
+                break;
+            }
+        }
+        transaction_progress_.emplace(
+            trans.id,
+            TransactionProgress{group_promoted, false, false});
+        const bool first_read = pending_rd_q_.count(trans.addr) == 0;
         pending_rd_q_.insert(std::make_pair(trans.addr, trans));
-        if (pending_rd_q_.count(trans.addr) == 1) {
+        if (first_read) {
             if (is_unified_queue_) {
                 unified_queue_.push_back(trans);
             } else {
@@ -226,6 +317,9 @@ bool Controller::AddTransaction(Transaction trans) {
 }
 
 void Controller::ScheduleTransaction() {
+    if (pause_requested_) {
+        return;
+    }
     // determine whether to schedule read or write
     if (write_draining_ == 0 && !is_unified_queue_) {
         // we basically have a upper and lower threshold for write buffer
@@ -245,6 +339,7 @@ void Controller::ScheduleTransaction() {
             if (cmd_queue_.QueueIsEmpty(cmd.Rank(), cmd.Bankgroup(),
                                             cmd.Bank())) {
                 cmd_queue_.AddCommand(cmd);
+                MarkPromoted(*it);
                 it = pim_queue_.erase(it);
                 it--;
                 // break;
@@ -268,7 +363,10 @@ void Controller::ScheduleTransaction() {
                 }
                 write_draining_ -= 1;
             }
-            cmd_queue_.AddCommand(cmd);
+            if (!cmd_queue_.AddCommand(cmd)) {
+                break;
+            }
+            MarkPromoted(*it);
             queue.erase(it);
             break;
         }
@@ -307,6 +405,7 @@ void Controller::IssueCommand(const Command &cmd) {
             // std::cerr << "READ cycle started: " << clk_ << "\t cycle ended: " << clk_ + config_.tCCD_L << std::endl;
             it->second.complete_cycle = clk_ + config_.tCCD_L;
             return_queue_.push_back(it->second);
+            MarkCommandComplete(it->second.id);
             pending_pim_q_.erase(it);
         } else {
             if (num_reads == 0) {
@@ -320,6 +419,7 @@ void Controller::IssueCommand(const Command &cmd) {
                 auto it = pending_rd_q_.find(cmd.hex_addr);
                 it->second.complete_cycle = clk_ + config_.read_delay;
                 return_queue_.push_back(it->second);
+                MarkCommandComplete(it->second.id);
                 pending_rd_q_.erase(it);
                 num_reads -= 1;
             }
@@ -340,6 +440,7 @@ void Controller::IssueCommand(const Command &cmd) {
             it->second.complete_cycle = clk_ + config_.tCCD_L;
             // std::cerr << "WRITE cycle started: " << clk_ << "\t cycle ended: " << clk_ + config_.tCCD_L << std::endl;
             return_queue_.push_back(it->second);
+            MarkCommandComplete(it->second.id);
             pending_pim_q_.erase(it);
         } else {
             // there should be only 1 write to the same location at a time
@@ -350,30 +451,12 @@ void Controller::IssueCommand(const Command &cmd) {
             }
             auto wr_lat = clk_ - it->second.added_cycle + config_.write_delay;
             simple_stats_.AddValue("write_latency", wr_lat);
+            MarkCommandComplete(it->second.id);
             pending_wr_q_.erase(it);
         }
     }
     // must update stats before states (for row hits)
     UpdateCommandStats(cmd);
-                    std::string cmdname = "OTHER";
-                    switch (cmd.cmd_type) {
-                    case CommandType::READ:
-                        cmdname = "READ";
-                        break;
-                    case CommandType::WRITE:
-                        cmdname = "WRITE";
-                        break;
-                    case CommandType::WRITE_PRECHARGE:
-                        cmdname = "WRITE_PRE";
-                        break;
-                    case CommandType::READ_PRECHARGE:
-                        cmdname = "READ_PRE";
-                        break;
-                    case CommandType::PRECHARGE:
-                        cmdname = "PRECHARGE";
-                        break;
-                    }
-                    // std::cerr << "+++++++++command found " << cmdname << " at cycle " << clk_ << std::endl;
     channel_state_.UpdateTimingAndStates(cmd, clk_);
 }
 
@@ -387,7 +470,70 @@ Command Controller::TransToCommand(const Transaction &trans) {
         cmd_type = trans.is_write ? CommandType::WRITE_PRECHARGE
                                   : CommandType::READ_PRECHARGE;
     }
-    return Command(cmd_type, addr, trans.addr, trans.is_pim);
+    return Command(cmd_type, addr, trans.addr, trans.is_pim, trans.id);
+}
+
+void Controller::MarkPromoted(const Transaction& trans) {
+    if (!trans.is_pim && !trans.is_write) {
+        MarkReadGroupPromoted(trans.addr);
+        return;
+    }
+    auto progress = transaction_progress_.find(trans.id);
+    if (progress == transaction_progress_.end()) {
+        std::cerr << "Cannot promote an unknown transaction." << std::endl;
+        AbruptExit(__FILE__, __LINE__);
+    }
+    progress->second.promoted = true;
+}
+
+void Controller::MarkReadGroupPromoted(uint64_t addr) {
+    auto range = pending_rd_q_.equal_range(addr);
+    for (auto it = range.first; it != range.second; ++it) {
+        auto progress = transaction_progress_.find(it->second.id);
+        if (progress == transaction_progress_.end()) {
+            std::cerr << "Cannot promote an unknown merged read." << std::endl;
+            AbruptExit(__FILE__, __LINE__);
+        }
+        progress->second.promoted = true;
+    }
+}
+
+void Controller::MarkCommandComplete(uint64_t transaction_id) {
+    auto progress = transaction_progress_.find(transaction_id);
+    if (progress == transaction_progress_.end()) {
+        std::cerr << "Cannot complete an unknown transaction command."
+                  << std::endl;
+        AbruptExit(__FILE__, __LINE__);
+    }
+    progress->second.command_complete = true;
+    RetireProgressIfComplete(transaction_id);
+}
+
+void Controller::MarkArchitecturalComplete(uint64_t transaction_id) {
+    auto progress = transaction_progress_.find(transaction_id);
+    if (progress == transaction_progress_.end()) {
+        std::cerr << "Cannot retire an unknown transaction completion."
+                  << std::endl;
+        AbruptExit(__FILE__, __LINE__);
+    }
+    progress->second.architectural_complete = true;
+    RetireProgressIfComplete(transaction_id);
+}
+
+void Controller::RetireProgressIfComplete(uint64_t transaction_id) {
+    auto progress = transaction_progress_.find(transaction_id);
+    if (progress == transaction_progress_.end() ||
+        !progress->second.command_complete ||
+        !progress->second.architectural_complete) {
+        return;
+    }
+    pause_pending_ids_.erase(transaction_id);
+    transaction_progress_.erase(progress);
+}
+
+uint64_t Controller::ParkedTransactionCount() const {
+    return unified_queue_.size() + read_queue_.size() + pim_queue_.size() +
+           write_buffer_.size();
 }
 
 int Controller::QueueUsage() const { return cmd_queue_.QueueUsage(); }
@@ -452,7 +598,16 @@ void Controller::UpdateCommandStats(const Command &cmd) {
         case CommandType::SREF_EXIT:
             simple_stats_.Increment("num_srefx_cmds");
             break;
-        default:
+        case CommandType::TOGGLE_ON:
+            simple_stats_.Increment("num_toggle_on_cmds");
+            simple_stats_.IncrementBy("toggle_on_wait_cycles", config_.tTGON);
+            break;
+        case CommandType::TOGGLE_OFF:
+            simple_stats_.Increment("num_toggle_off_cmds");
+            simple_stats_.IncrementBy("toggle_off_wait_cycles",
+                                      config_.tTGOFF);
+            break;
+        case CommandType::SIZE:
             AbruptExit(__FILE__, __LINE__);
     }
 }

@@ -2,6 +2,15 @@
 
 namespace dramsim3 {
 
+CPU::CPU(const std::string& config_file, const std::string& output_dir)
+    : memory_system_(
+          config_file, output_dir,
+          std::bind(&CPU::ReadCallBack, this, std::placeholders::_1),
+          std::bind(&CPU::WriteCallBack, this, std::placeholders::_1)),
+      clk_(0) {
+    memory_system_.PrintAddressMapping();
+}
+
 void RandomCPU::ClockTick() {
     // Create random CPU requests at full speed
     // this is useful to exploit the parallelism of a DRAM protocol

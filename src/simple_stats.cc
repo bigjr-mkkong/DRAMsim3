@@ -36,6 +36,13 @@ SimpleStats::SimpleStats(const Config& config, int channel_id)
     InitStat("num_refb_cmds", "counter", "Number of REFb commands");
     InitStat("num_srefe_cmds", "counter", "Number of SREFE commands");
     InitStat("num_srefx_cmds", "counter", "Number of SREFX commands");
+    InitStat("num_toggle_on_cmds", "counter", "Number of TOGGLE_ON commands");
+    InitStat("num_toggle_off_cmds", "counter",
+             "Number of TOGGLE_OFF commands");
+    InitStat("toggle_on_wait_cycles", "counter",
+             "Cumulative configured TOGGLE_ON wait cycles");
+    InitStat("toggle_off_wait_cycles", "counter",
+             "Cumulative configured TOGGLE_OFF wait cycles");
     InitStat("hbm_dual_cmds", "counter", "Number of cycles dual cmds issued");
 
     // double stats

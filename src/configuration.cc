@@ -1,5 +1,6 @@
 #include "configuration.h"
 
+#include <cmath>
 #include <vector>
 
 #ifdef THERMAL
@@ -39,6 +40,105 @@ Address Config::AddressMapping(uint64_t hex_addr) const {
     int ro = (hex_addr >> ro_pos) & ro_mask;
     int co = (hex_addr >> co_pos) & co_mask;
     return Address(channel, rank, bg, ba, ro, co);
+}
+
+std::vector<std::string> Config::AddressMappingFields() const {
+    if (address_mapping.size() != 12) {
+        std::cerr << "Unknown address mapping (6 fields each 2 chars required)"
+                  << std::endl;
+        AbruptExit(__FILE__, __LINE__);
+    }
+
+    std::vector<std::string> fields;
+    for (size_t i = 0; i < address_mapping.size(); i += 2) {
+        fields.push_back(address_mapping.substr(i, 2));
+    }
+    return fields;
+}
+
+int Config::AddressMappingFieldBits(const std::string& field) const {
+    if (field == "ch") {
+        return static_cast<int>(count_ones(ch_mask));
+    } else if (field == "ra") {
+        return static_cast<int>(count_ones(ra_mask));
+    } else if (field == "bg") {
+        return static_cast<int>(count_ones(bg_mask));
+    } else if (field == "ba") {
+        return static_cast<int>(count_ones(ba_mask));
+    } else if (field == "ro") {
+        return static_cast<int>(count_ones(ro_mask));
+    } else if (field == "co") {
+        return static_cast<int>(count_ones(co_mask));
+    }
+    std::cerr << "Unrecognized field: " << field << std::endl;
+    AbruptExit(__FILE__, __LINE__);
+    return -1;
+}
+
+int Config::AddressMappingFieldPosition(const std::string& field) const {
+    if (field == "ch") {
+        return ch_pos;
+    } else if (field == "ra") {
+        return ra_pos;
+    } else if (field == "bg") {
+        return bg_pos;
+    } else if (field == "ba") {
+        return ba_pos;
+    } else if (field == "ro") {
+        return ro_pos;
+    } else if (field == "co") {
+        return co_pos;
+    }
+    std::cerr << "Unrecognized field: " << field << std::endl;
+    AbruptExit(__FILE__, __LINE__);
+    return -1;
+}
+
+void Config::PrintAddressMapping(std::ostream& os) const {
+    const std::vector<std::string> fields = AddressMappingFields();
+
+    os << "DRAMsim3 address mapping" << std::endl;
+    os << "  mapping string: " << address_mapping << std::endl;
+    os << "  request size: " << request_size_bytes << " bytes (offset bits: "
+       << shift_bits << ")" << std::endl;
+
+    os << "  field order (MSB -> LSB after offset): ";
+    for (size_t i = 0; i < fields.size(); i++) {
+        if (i != 0) {
+            os << " ";
+        }
+        os << fields[i] << "[" << AddressMappingFieldBits(fields[i]) << "]";
+    }
+    os << std::endl;
+
+    os << "  field widths: "
+       << "ch=" << AddressMappingFieldBits("ch") << ", "
+       << "ra=" << AddressMappingFieldBits("ra") << ", "
+       << "bg=" << AddressMappingFieldBits("bg") << ", "
+       << "ba=" << AddressMappingFieldBits("ba") << ", "
+       << "ro=" << AddressMappingFieldBits("ro") << ", "
+       << "co=" << AddressMappingFieldBits("co") << std::endl;
+
+    os << "  address bit ranges: ";
+    for (size_t i = 0; i < fields.size(); i++) {
+        const std::string& field = fields[i];
+        const int width = AddressMappingFieldBits(field);
+        if (i != 0) {
+            os << ", ";
+        }
+        os << field << "=";
+        if (width == 0) {
+            os << "unused";
+        } else {
+            const int low_bit = AddressMappingFieldPosition(field) + shift_bits;
+            const int high_bit = low_bit + width - 1;
+            os << "[" << high_bit << ":" << low_bit << "]";
+        }
+    }
+    if (shift_bits > 0) {
+        os << ", offset=[" << (shift_bits - 1) << ":0]";
+    }
+    os << std::endl;
 }
 
 void Config::CalculateSize() {
@@ -227,7 +327,14 @@ void Config::InitSystemParams() {
     unified_queue = reader.GetBoolean("system", "unified_queue", false);
     write_buf_size = GetInteger("system", "write_buf_size", 16);
     enable_pim_switch = reader.GetBoolean("system", "enable_pim_switch", false);
-    pim_swith_t = reader.GetReal("system", "pim_swith_t", 0.0);
+    if (enable_pim_switch && row_buf_policy != "OPEN_PAGE") {
+        std::cerr
+            << "enable_pim_switch requires row_buf_policy = OPEN_PAGE; "
+            << "automatic READ_PRECHARGE/WRITE_PRECHARGE currently bypasses "
+            << "the required TOGGLE_ON -> PRECHARGE -> TOGGLE_OFF sequence."
+            << std::endl;
+        AbruptExit(__FILE__, __LINE__);
+    }
     std::string ref_policy =
         reader.Get("system", "refresh_policy", "RANK_LEVEL_STAGGERED");
     if (ref_policy == "RANK_LEVEL_SIMULTANEOUS") {
@@ -300,6 +407,13 @@ void Config::InitTimingParams() {
     // just be temporary, ultimately we only need cmd to cmd Timing
     const auto& reader = *reader_;
     tCK = reader.GetReal("timing", "tCK", 1.0);
+    tTGON = GetInteger("timing", "tTGON", 0);
+    tTGOFF = GetInteger("timing", "tTGOFF", tTGON);
+    if (tTGON < 0 || tTGOFF < 0) {
+        std::cerr << "tTGON and tTGOFF must be non-negative cycle counts."
+                  << std::endl;
+        AbruptExit(__FILE__, __LINE__);
+    }
     AL = GetInteger("timing", "AL", 0);
     CL = GetInteger("timing", "CL", 12);
     CWL = GetInteger("timing", "CWL", 12);
@@ -315,6 +429,28 @@ void Config::InitTimingParams() {
     tRRD_S = GetInteger("timing", "tRRD_S", 4);
     tRAS = GetInteger("timing", "tRAS", 24);
     tRCD = GetInteger("timing", "tRCD", 10);
+    near_segment_latency_scale =
+        reader.GetReal("timing", "near_segment_latency_scale", -1.0);
+    if (enable_pim_switch &&
+        (near_segment_latency_scale <= 0.0 ||
+         near_segment_latency_scale > 1.0)) {
+        std::cerr
+            << "enable_pim_switch requires near_segment_latency_scale in "
+               "the range (0, 1]."
+            << std::endl;
+        AbruptExit(__FILE__, __LINE__);
+    }
+    if (near_segment_latency_scale > 0.0) {
+        tRP_near = static_cast<int>(
+            std::ceil(static_cast<double>(tRP) * near_segment_latency_scale));
+        tRCD_near = static_cast<int>(
+            std::ceil(static_cast<double>(tRCD) * near_segment_latency_scale));
+        near_segment_switch_latency = tRP_near + tRCD_near;
+    } else {
+        tRP_near = tRP;
+        tRCD_near = tRCD;
+        near_segment_switch_latency = tRP + tRCD;
+    }
     tRFC = GetInteger("timing", "tRFC", 74);
     tRC = tRAS + tRP;
     tCKE = GetInteger("timing", "tCKE", 6);
@@ -363,19 +499,9 @@ void Config::SetAddressMapping() {
     field_widths["ro"] = LogBase2(rows);
     field_widths["co"] = actual_col_bits;
 
-    if (address_mapping.size() != 12) {
-        std::cerr << "Unknown address mapping (6 fields each 2 chars required)"
-                  << std::endl;
-        AbruptExit(__FILE__, __LINE__);
-    }
-
     // // get address mapping position fields from config
     // // each field must be 2 chars
-    std::vector<std::string> fields;
-    for (size_t i = 0; i < address_mapping.size(); i += 2) {
-        std::string token = address_mapping.substr(i, 2);
-        fields.push_back(token);
-    }
+    std::vector<std::string> fields = AddressMappingFields();
 
     std::map<std::string, int> field_pos;
     int pos = 0;
@@ -397,12 +523,12 @@ void Config::SetAddressMapping() {
     ro_pos = field_pos.at("ro");
     co_pos = field_pos.at("co");
 
-    ch_mask = (1 << field_widths.at("ch")) - 1;
-    ra_mask = (1 << field_widths.at("ra")) - 1;
-    bg_mask = (1 << field_widths.at("bg")) - 1;
-    ba_mask = (1 << field_widths.at("ba")) - 1;
-    ro_mask = (1 << field_widths.at("ro")) - 1;
-    co_mask = (1 << field_widths.at("co")) - 1;
+    ch_mask = (1ULL << field_widths.at("ch")) - 1;
+    ra_mask = (1ULL << field_widths.at("ra")) - 1;
+    bg_mask = (1ULL << field_widths.at("bg")) - 1;
+    ba_mask = (1ULL << field_widths.at("ba")) - 1;
+    ro_mask = (1ULL << field_widths.at("ro")) - 1;
+    co_mask = (1ULL << field_widths.at("co")) - 1;
 }
 
 }  // namespace dramsim3

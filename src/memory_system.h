@@ -27,10 +27,39 @@ class MemorySystem {
     int GetBusBits() const;
     int GetBurstLength() const;
     int GetQueueSize() const;
+    int GetNearSwitchLatency() const {
+        return config_->near_segment_switch_latency;
+    };
+    int GetToggleOnLatency() const { return config_->tTGON; };
+    int GetToggleOffLatency() const { return config_->tTGOFF; };
+    void SetToggleLatencies(int toggle_on_cycles, int toggle_off_cycles) {
+        dram_system_->SetToggleLatencies(toggle_on_cycles,
+                                         toggle_off_cycles);
+    };
+    bool GetPimSwitchEnabled() const { return config_->enable_pim_switch; };
+    uint64_t GetCapacityBytes() const {
+        return static_cast<uint64_t>(config_->channel_size) *
+               static_cast<uint64_t>(config_->channels) * 1024ULL * 1024ULL;
+    };
     int GetClock() const { return dram_system_->GetClock(); };
     bool GetPimMode() const { return dram_system_->GetPimMode(); };
     bool IsDrained() const { return dram_system_->IsDrained(); };
     void SetPimMode(bool mode) { dram_system_->SetPimMode(mode); };
+    void RequestPause() { dram_system_->RequestPause(); };
+    bool IsPauseRequested() const {
+        return dram_system_->IsPauseRequested();
+    };
+    bool IsPauseReady() const { return dram_system_->IsPauseReady(); };
+    void CommitPausedMode(bool mode) {
+        dram_system_->CommitPausedMode(mode);
+    };
+    void CancelPause() { dram_system_->CancelPause(); };
+    uint64_t GetPauseParkedTransactions() const {
+        return dram_system_->GetPauseParkedTransactions();
+    };
+    uint64_t GetPausePromotedTransactions() const {
+        return dram_system_->GetPausePromotedTransactions();
+    };
 
     //TODO: Figure out what are these mmap
     void MMap(int64_t data_index, size_t start_addr, size_t end_addr, size_t offset);
@@ -52,6 +81,7 @@ class MemorySystem {
     uint64_t GetBanksPerBG() const { return config_->banks_per_group; }
     uint64_t GetBankgroupsPerRank() const { return config_->bankgroups; }
     uint64_t GetChannels() const { return config_->channels; }
+    void PrintAddressMapping() const;
     void PrintStats() const;
     void ResetStats();
 

@@ -64,15 +64,25 @@ enum class CommandType {
     REFRESH,
     SREF_ENTER,
     SREF_EXIT,
+    TOGGLE_ON,
+    TOGGLE_OFF,
     SIZE
 };
 
 struct Command {
-    Command() : cmd_type(CommandType::SIZE), hex_addr(0) {}
+    Command()
+        : cmd_type(CommandType::SIZE), hex_addr(0), is_pim(false),
+          transaction_id(0) {}
     Command(CommandType cmd_type, const Address& addr, uint64_t hex_addr)
-        : cmd_type(cmd_type), addr(addr), hex_addr(hex_addr) {}
+        : cmd_type(cmd_type), addr(addr), hex_addr(hex_addr), is_pim(false),
+          transaction_id(0) {}
     Command(CommandType cmd_type, const Address& addr, uint64_t hex_addr, bool is_pim)
-        : cmd_type(cmd_type), addr(addr), hex_addr(hex_addr), is_pim(is_pim) {}
+        : cmd_type(cmd_type), addr(addr), hex_addr(hex_addr), is_pim(is_pim),
+          transaction_id(0) {}
+    Command(CommandType cmd_type, const Address& addr, uint64_t hex_addr,
+            bool is_pim, uint64_t transaction_id)
+        : cmd_type(cmd_type), addr(addr), hex_addr(hex_addr), is_pim(is_pim),
+          transaction_id(transaction_id) {}
     // Command(const Command& cmd) {}
 
     bool IsValid() const { return cmd_type != CommandType::SIZE; }
@@ -89,6 +99,10 @@ struct Command {
                cmd_type == CommandType ::WRITE_PRECHARGE;
     }
     bool IsReadWrite() const { return IsRead() || IsWrite(); }
+    bool IsToggle() const {
+        return cmd_type == CommandType::TOGGLE_ON ||
+               cmd_type == CommandType::TOGGLE_OFF;
+    }
     bool IsRankCMD() const {
         return cmd_type == CommandType::REFRESH ||
                cmd_type == CommandType::SREF_ENTER ||
@@ -98,6 +112,9 @@ struct Command {
     Address addr;
     uint64_t hex_addr;
     bool is_pim;
+    // Controller-local identity used only to track promoted work across a
+    // pause barrier. It does not cross the public DRAMSim3 callback ABI.
+    uint64_t transaction_id;
 
     int Channel() const { return addr.channel; }
     int Rank() const { return addr.rank; }
@@ -110,25 +127,29 @@ struct Command {
 };
 
 struct Transaction {
-    Transaction() {}
+    Transaction() : id(0) {}
     Transaction(uint64_t addr, bool is_write)
-        : addr(addr),
+        : id(0),
+          addr(addr),
           added_cycle(0),
           complete_cycle(0),
           is_write(is_write),
           is_pim(false) {}
     Transaction(uint64_t addr, bool is_write, bool is_pim)
-        : addr(addr),
+        : id(0),
+          addr(addr),
           added_cycle(0),
           complete_cycle(0),
           is_write(is_write),
           is_pim(is_pim) {}
     Transaction(const Transaction& tran)
-        : addr(tran.addr),
+        : id(tran.id),
+          addr(tran.addr),
           added_cycle(tran.added_cycle),
           complete_cycle(tran.complete_cycle),
           is_write(tran.is_write),
           is_pim(tran.is_pim) {}
+    uint64_t id;
     uint64_t addr;
     uint64_t added_cycle;
     uint64_t complete_cycle;

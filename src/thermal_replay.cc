@@ -96,6 +96,8 @@ void ThermalReplay::ParseLine(std::string line, uint64_t &clk, Command &cmd) {
         {"refresh", CommandType::REFRESH},
         {"self_refresh_enter", CommandType::SREF_ENTER},
         {"self_refresh_exit", CommandType::SREF_EXIT},
+        {"toggle_on", CommandType::TOGGLE_ON},
+        {"toggle_off", CommandType::TOGGLE_OFF},
     };
     std::vector<std::string> tokens = StringSplit(line, ' ');
 
@@ -164,7 +166,17 @@ void ThermalReplay::ProcessCMD(Command &cmd, uint64_t clk) {
         case CommandType::SREF_EXIT:
             channel_stats_[channel].Increment("num_srefx_cmds");
             break;
-        default:
+        case CommandType::TOGGLE_ON:
+            channel_stats_[channel].Increment("num_toggle_on_cmds");
+            channel_stats_[channel].IncrementBy("toggle_on_wait_cycles",
+                                                config_.tTGON);
+            break;
+        case CommandType::TOGGLE_OFF:
+            channel_stats_[channel].Increment("num_toggle_off_cmds");
+            channel_stats_[channel].IncrementBy("toggle_off_wait_cycles",
+                                                config_.tTGOFF);
+            break;
+        case CommandType::SIZE:
             AbruptExit(__FILE__, __LINE__);
     }
 
@@ -180,7 +192,17 @@ void ThermalReplay::ProcessCMD(Command &cmd, uint64_t clk) {
             bank_active_[cmd.Channel()][cmd.Rank()][cmd.Bankgroup()]
                         [cmd.Bank()] = false;
             break;
-        default:
+        case CommandType::READ:
+        case CommandType::WRITE:
+        case CommandType::REFRESH_BANK:
+        case CommandType::REFRESH:
+        case CommandType::SREF_ENTER:
+        case CommandType::SREF_EXIT:
+        case CommandType::TOGGLE_ON:
+        case CommandType::TOGGLE_OFF:
+            break;
+        case CommandType::SIZE:
+            AbruptExit(__FILE__, __LINE__);
             break;
     }
 
